@@ -20,8 +20,15 @@ class ActionDecoder:
     clipped to eta_acc; violations are left to the reward/metrics.
     """
 
-    def __init__(self, pair_count: int) -> None:
+    def __init__(self, pair_count: int, max_pair_count: int | None = None) -> None:
         self.pair_count = int(pair_count)
+        self.max_pair_count = int(max_pair_count if max_pair_count is not None else pair_count)
+        if self.pair_count > self.max_pair_count:
+            raise ValueError("pair_count cannot exceed max_pair_count.")
+
+    @property
+    def action_dimension(self) -> int:
+        return self.max_pair_count + 1
 
     def decode_rl_action(
         self,
@@ -33,13 +40,18 @@ class ActionDecoder:
         random_generator: np.random.Generator | None = None,
     ) -> SchedulingAction:
         action = np.asarray(raw_action_array, dtype=np.float64).ravel()
-        if action.shape[0] != self.pair_count + 1:
-            raise ValueError(f"Expected action dimension {self.pair_count + 1}, got {action.shape[0]}")
+        if action.shape[0] != self.max_pair_count + 1:
+            raise ValueError(f"Expected action dimension {self.max_pair_count + 1}, got {action.shape[0]}")
         pair_scores = action[: self.pair_count]
-        requested_accuracy = float(np.clip(action[self.pair_count], 0.0, 1.0))
+        requested_accuracy = float(np.clip(action[self.max_pair_count], 0.0, 1.0))
+        if requested_accuracy <= 0.0:
+            return SchedulingAction(None, 0.0, requested_accuracy, False)
         if len(feasible_pair_indices) == 0:
             return SchedulingAction(None, 0.0, requested_accuracy, False)
         feasible_pair_indices_array = np.asarray(feasible_pair_indices, dtype=int)
+        feasible_pair_indices_array = feasible_pair_indices_array[feasible_pair_indices_array < self.pair_count]
+        if feasible_pair_indices_array.size == 0:
+            return SchedulingAction(None, 0.0, requested_accuracy, False)
         if deterministic:
             selected_pair = int(feasible_pair_indices_array[np.argmax(pair_scores[feasible_pair_indices_array])])
         else:

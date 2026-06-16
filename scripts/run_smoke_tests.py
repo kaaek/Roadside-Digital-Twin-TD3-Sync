@@ -20,7 +20,7 @@ def main() -> None:
     print("Action shape:", env.action_space.shape)
     print("Pair count:", env.scenario.pair_count)
     assert obs.shape == env.observation_space.shape
-    assert env.action_space.shape == (env.scenario.pair_count + 1,)
+    assert env.action_space.shape == (env.simulation_config.system.max_pair_count_for_action_space + 1,)
 
     policy = GreedyWeightedAoiPolicy()
     metrics = RolloutRunner().run_episode(env, policy, seed=1)

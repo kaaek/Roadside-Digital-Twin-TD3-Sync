@@ -12,6 +12,11 @@ DEFAULT_SLOT_DURATION_SECONDS: float = 1.0
 DEFAULT_VEHICLE_COUNT: int = 40
 DEFAULT_SENSOR_TYPE_COUNT: int = 8
 DEFAULT_SENSORS_PER_VEHICLE: int = 4
+
+# Fixed-capacity dimensions for RL action/observation padding.
+# These let one TD3 policy keep a stable shape across vehicle-count sweeps.
+DEFAULT_MAX_VEHICLE_COUNT_FOR_ACTION_SPACE: int = 80
+DEFAULT_MAX_SENSORS_PER_VEHICLE_FOR_ACTION_SPACE: int = 4
 DEFAULT_FRESHNESS_THRESHOLD_SLOTS: int = 10
 DEFAULT_ACCURACY_THRESHOLD: float = 0.80
 

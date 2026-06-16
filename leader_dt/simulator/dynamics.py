@@ -43,6 +43,7 @@ class LeaderSynchronizationDynamics:
             aoi_slots_array=np.ones(self.scenario.pair_count, dtype=np.float64),
             cpu_backlog_cycles_float=0.0,
             previous_cpu_added_cycles_float=0.0,
+            cpu_backlog_by_pair_cycles_array=np.zeros(self.scenario.pair_count, dtype=np.float64),
         )
 
     def advance_vehicle_positions(self, state: SimulationState) -> np.ndarray:
@@ -50,6 +51,16 @@ class LeaderSynchronizationDynamics:
 
     def get_in_zone_vehicle_mask(self, state: SimulationState) -> np.ndarray:
         return self.topology.in_defective_zone_mask(state.vehicle_positions_meter_array)
+
+    def get_active_pair_mask(self, state: SimulationState) -> np.ndarray:
+        in_zone_mask = self.get_in_zone_vehicle_mask(state)
+        active_pair_mask = np.zeros(self.scenario.pair_count, dtype=bool)
+        for pair in self.scenario.sensor_pair_index.pairs:
+            active_pair_mask[int(pair.pair_id)] = bool(in_zone_mask[int(pair.vehicle_id)])
+        return active_pair_mask
+
+    def get_active_pair_indices(self, state: SimulationState) -> list[int]:
+        return np.where(self.get_active_pair_mask(state))[0].astype(int).tolist()
 
     def get_feasible_pair_indices(self, state: SimulationState) -> list[int]:
         in_zone_mask = self.get_in_zone_vehicle_mask(state)
@@ -76,6 +87,15 @@ class LeaderSynchronizationDynamics:
 
     def compute_uplink_capacity_bits_array(self, state: SimulationState) -> np.ndarray:
         return self.compute_uplink_rate_array_by_pair(state) * self.simulation_config.system.slot_duration_seconds
+
+    def drain_cpu_backlog_by_pair(self, cpu_backlog_by_pair_cycles_array: np.ndarray, slot_duration_seconds: float) -> np.ndarray:
+        backlog_array = np.asarray(cpu_backlog_by_pair_cycles_array, dtype=np.float64).copy()
+        total_backlog_float = float(np.sum(backlog_array))
+        processing_capacity_float = self.cpu_backlog_model.cpu_frequency_cycles_per_second * slot_duration_seconds
+        if total_backlog_float <= processing_capacity_float:
+            return np.zeros_like(backlog_array)
+        remaining_ratio_float = (total_backlog_float - processing_capacity_float) / max(total_backlog_float, 1.0e-12)
+        return backlog_array * remaining_ratio_float
 
     def step(self, state: SimulationState, action: SchedulingAction) -> tuple[SimulationState, dict]:
         slot_index = state.time_slot_index
@@ -108,28 +128,44 @@ class LeaderSynchronizationDynamics:
             transmission_delay_slots_float=transmission_delay_slots,
             refresh_success_boolean=refresh_success,
         )
-        next_cpu = self.cpu_backlog_model.next_backlog_cycles(
-            state.cpu_backlog_cycles_float,
-            added_cycles,
-            self.simulation_config.system.slot_duration_seconds,
-        )
-        next_state = SimulationState(
+        current_cpu_by_pair = np.asarray(state.cpu_backlog_by_pair_cycles_array, dtype=np.float64)
+        if current_cpu_by_pair.shape[0] != self.scenario.pair_count:
+            current_cpu_by_pair = np.zeros(self.scenario.pair_count, dtype=np.float64)
+        next_cpu_by_pair = current_cpu_by_pair.copy()
+        if pair_index is not None and added_cycles > 0.0:
+            next_cpu_by_pair[int(pair_index)] += added_cycles
+        next_cpu_by_pair = self.drain_cpu_backlog_by_pair(next_cpu_by_pair, self.simulation_config.system.slot_duration_seconds)
+        next_vehicle_positions = self.advance_vehicle_positions(state)
+        preliminary_next_state = SimulationState(
             time_slot_index=state.time_slot_index + 1,
-            vehicle_positions_meter_array=self.advance_vehicle_positions(state),
+            vehicle_positions_meter_array=next_vehicle_positions,
             aoi_slots_array=next_aoi,
-            cpu_backlog_cycles_float=next_cpu,
+            cpu_backlog_cycles_float=float(np.sum(next_cpu_by_pair)),
             previous_cpu_added_cycles_float=added_cycles,
+            cpu_backlog_by_pair_cycles_array=next_cpu_by_pair,
+        )
+        active_pair_mask = self.get_active_pair_mask(preliminary_next_state)
+        next_cpu_by_pair = next_cpu_by_pair.copy()
+        next_cpu_by_pair[~active_pair_mask] = 0.0
+        next_state = SimulationState(
+            time_slot_index=preliminary_next_state.time_slot_index,
+            vehicle_positions_meter_array=preliminary_next_state.vehicle_positions_meter_array,
+            aoi_slots_array=preliminary_next_state.aoi_slots_array,
+            cpu_backlog_cycles_float=float(np.sum(next_cpu_by_pair)),
+            previous_cpu_added_cycles_float=added_cycles,
+            cpu_backlog_by_pair_cycles_array=next_cpu_by_pair,
         )
         info = {
             "achieved_accuracy_float": achieved_accuracy,
             "refresh_success_boolean": refresh_success,
             "added_cycles_float": added_cycles,
-            "weighted_aoi_float": self.objective.weighted_aoi_at_slot(next_aoi),
-            "freshness_violation_count_integer": self.aoi_transition_model.count_freshness_violations(next_aoi),
+            "weighted_aoi_float": self.objective.weighted_aoi_at_slot(next_aoi, active_pair_mask),
+            "freshness_violation_count_integer": self.aoi_transition_model.count_freshness_violations(next_aoi, active_pair_mask),
             "accuracy_violation_count_integer": int(pair_index is not None and not refresh_success),
             "terminal_cpu_violation_count_integer": int(
                 next_state.time_slot_index >= self.simulation_config.system.time_horizon_slots
                 and next_state.cpu_backlog_cycles_float > 1.0e-9
             ),
+            "active_pair_count_integer": int(np.sum(active_pair_mask)),
         }
         return next_state, info

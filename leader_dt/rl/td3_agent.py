@@ -45,6 +45,7 @@ class Td3Trainer:
             policy_kwargs=policy_kwargs,
             verbose=1,
             device=self.training_config.device,
+            seed=self.simulation_config.random_seed,
         )
 
     def train(self) -> TD3:

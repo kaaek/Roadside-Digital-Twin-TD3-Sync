@@ -33,12 +33,12 @@ class LeaderSynchronizationEnv(gym.Env):
         self.scenario = self.scenario_generator.generate(seed=self.simulation_config.random_seed)
         self.observation_builder = ObservationBuilder(self.simulation_config)
         self.reward_calculator = RewardCalculator(self.simulation_config)
-        self.action_decoder = ActionDecoder(pair_count=self.scenario.pair_count)
+        self.action_decoder = ActionDecoder(pair_count=self.scenario.pair_count, max_pair_count=self.simulation_config.system.max_pair_count_for_action_space)
         self.dynamics = self._build_dynamics()
         self.state = None
         self.episode_record = EpisodeRecord()
         self.random_generator = np.random.default_rng(self.simulation_config.random_seed)
-        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.scenario.pair_count + 1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.simulation_config.system.max_pair_count_for_action_space + 1,), dtype=np.float32)
         self.observation_space = self.observation_builder.build_observation_space(self.scenario)
 
     def _build_dynamics(self) -> LeaderSynchronizationDynamics:
@@ -56,11 +56,11 @@ class LeaderSynchronizationEnv(gym.Env):
         effective_seed = seed if seed is not None else self.simulation_config.random_seed
         self.random_generator = np.random.default_rng(effective_seed)
         self.scenario = self.scenario_generator.generate(seed=effective_seed)
-        self.action_decoder = ActionDecoder(pair_count=self.scenario.pair_count)
+        self.action_decoder = ActionDecoder(pair_count=self.scenario.pair_count, max_pair_count=self.simulation_config.system.max_pair_count_for_action_space)
         self.dynamics = self._build_dynamics()
         self.state = self.dynamics.initialize_state()
         self.episode_record = EpisodeRecord()
-        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.scenario.pair_count + 1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.simulation_config.system.max_pair_count_for_action_space + 1,), dtype=np.float32)
         self.observation_space = self.observation_builder.build_observation_space(self.scenario)
         return self._build_observation(), {}
 
@@ -74,7 +74,7 @@ class LeaderSynchronizationEnv(gym.Env):
             feasible_pair_indices=feasible_pair_indices,
             available_data_size_bits_array=self.scenario.available_data_size_bits_matrix[slot_index],
             uplink_capacity_bits_array=self.dynamics.compute_uplink_capacity_bits_array(self.state),
-            deterministic=True,
+            deterministic=False,
             random_generator=self.random_generator,
         )
         next_state, transition_info = self.dynamics.step(self.state, scheduling_action)
@@ -89,6 +89,7 @@ class LeaderSynchronizationEnv(gym.Env):
             terminal_cpu_violation_count_integer=transition_info["terminal_cpu_violation_count_integer"],
         )
         self.state = next_state
+        active_pair_mask_array = self.dynamics.get_active_pair_mask(next_state)
         self.episode_record.append_step(
             StepRecord(
                 time_slot_index=next_state.time_slot_index,
@@ -102,8 +103,10 @@ class LeaderSynchronizationEnv(gym.Env):
                 accuracy_violation_count=transition_info["accuracy_violation_count_integer"],
                 terminal_cpu_violation_count=transition_info["terminal_cpu_violation_count_integer"],
                 reward_float=float(reward),
+                active_pair_count=transition_info.get("active_pair_count_integer", int(np.sum(active_pair_mask_array))),
             ),
             next_state.aoi_slots_array,
+            active_pair_mask_array,
         )
         terminated = next_state.time_slot_index >= self.simulation_config.system.time_horizon_slots
         truncated = False
@@ -113,4 +116,5 @@ class LeaderSynchronizationEnv(gym.Env):
         if self.state is None:
             raise RuntimeError("Environment state is not initialized.")
         feasible_pair_indices = self.dynamics.get_feasible_pair_indices(self.state)
-        return self.observation_builder.build_observation(self.state, self.scenario, feasible_pair_indices)
+        active_pair_indices = self.dynamics.get_active_pair_indices(self.state)
+        return self.observation_builder.build_observation(self.state, self.scenario, feasible_pair_indices, active_pair_indices)

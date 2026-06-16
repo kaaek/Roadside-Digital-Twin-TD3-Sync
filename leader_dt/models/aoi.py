@@ -18,5 +18,11 @@ class AoiTransitionModel:
             next_aoi[int(scheduled_pair_index)] = float(sensing_delay_slots_float + transmission_delay_slots_float)
         return next_aoi
 
-    def count_freshness_violations(self, aoi_slots_array: np.ndarray) -> int:
-        return int(np.sum(np.asarray(aoi_slots_array) > self.freshness_threshold_slots))
+    def count_freshness_violations(self, aoi_slots_array: np.ndarray, active_pair_mask_array: np.ndarray | None = None) -> int:
+        aoi_array = np.asarray(aoi_slots_array, dtype=np.float64)
+        if active_pair_mask_array is not None:
+            active_mask = np.asarray(active_pair_mask_array, dtype=bool)
+            if active_mask.shape[0] != aoi_array.shape[0]:
+                raise ValueError("active_pair_mask_array must have the same length as aoi_slots_array.")
+            aoi_array = aoi_array[active_mask]
+        return int(np.sum(aoi_array > self.freshness_threshold_slots))
