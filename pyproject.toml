@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leader-dt"
+version = "0.2.0"
+description = "Leader-assisted Digital Twin synchronization under RSU failure"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "gymnasium>=0.29",
+  "stable-baselines3>=2.3",
+  "torch>=2.0",
+  "matplotlib>=3.7",
+]
+
+[tool.setuptools.packages.find]
+include = ["leader_dt*"]

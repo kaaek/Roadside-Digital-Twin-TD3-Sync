@@ -1,0 +1,21 @@
+"""Evaluation metric dataclasses."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class RolloutMetrics:
+    average_weighted_aoi_float: float
+    maximum_aoi_float: float
+    freshness_violation_count_integer: int
+    accuracy_violation_count_integer: int
+    terminal_cpu_violation_count_integer: int
+    final_cpu_backlog_cycles_float: float
+    total_collected_bits_float: float
+    mean_accuracy_float: float
+    episode_return_float: float
+
+class MetricCalculator:
+    def compute_from_episode_record(self, episode_record) -> RolloutMetrics:
+        metrics = episode_record.to_metric_dictionary()
+        return RolloutMetrics(**metrics)
