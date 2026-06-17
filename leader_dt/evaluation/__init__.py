@@ -4,12 +4,14 @@ from leader_dt.evaluation.monte_carlo import MonteCarloEvaluator, MonteCarloResu
 from leader_dt.evaluation.rollout import RolloutRunner
 from leader_dt.evaluation.sensitivity import SensitivityEvaluator, SensitivityPointResult
 from leader_dt.evaluation.reporting import ExperimentReport, ReportWriter
+from leader_dt.evaluation.penalized_objective import PenalizedObjectiveWeights
 
 __all__ = [
     "ExperimentReport",
     "MetricCalculator",
     "MonteCarloEvaluator",
     "MonteCarloResult",
+    "PenalizedObjectiveWeights",
     "ReportWriter",
     "RolloutMetrics",
     "RolloutRunner",
