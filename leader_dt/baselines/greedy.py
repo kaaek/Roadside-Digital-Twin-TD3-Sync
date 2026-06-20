@@ -5,7 +5,7 @@ import numpy as np
 from leader_dt.simulator.environment import LeaderSynchronizationEnv
 
 class GreedyWeightedAoiPolicy:
-    """Select feasible pair with largest w_i A_i(t), request full data."""
+    """Select feasible pair with largest w_s A_s(t), request full data."""
 
     def select_action(self, environment: LeaderSynchronizationEnv) -> np.ndarray:
         if environment.state is None:
@@ -14,15 +14,18 @@ class GreedyWeightedAoiPolicy:
         action = np.zeros(environment.action_space.shape, dtype=np.float32)
         if not feasible:
             return action
-        weights = environment.scenario.priority_weight_array_by_pair()
-        scores = weights * environment.state.aoi_slots_array
+        sensor_type_weights = environment.scenario.priority_weight_array_by_sensor_type()
+        sensor_type_aoi = environment.state.sensor_type_aoi_slots_array
+        scores = np.zeros(environment.scenario.pair_count, dtype=np.float64)
+        for pair in environment.scenario.sensor_pair_index.pairs:
+            scores[int(pair.pair_id)] = sensor_type_weights[int(pair.sensor_type_id)] * sensor_type_aoi[int(pair.sensor_type_id)]
         selected_pair = int(feasible[int(np.argmax(scores[feasible]))])
         action[selected_pair] = 1.0
         action[-1] = 1.0
         return action
 
 class GreedyMaxAoiPolicy:
-    """Select feasible pair with largest A_i(t), request full data."""
+    """Select feasible pair with largest A_s(t), request full data."""
 
     def select_action(self, environment: LeaderSynchronizationEnv) -> np.ndarray:
         if environment.state is None:
@@ -31,7 +34,11 @@ class GreedyMaxAoiPolicy:
         action = np.zeros(environment.action_space.shape, dtype=np.float32)
         if not feasible:
             return action
-        selected_pair = int(feasible[int(np.argmax(environment.state.aoi_slots_array[feasible]))])
+        sensor_type_aoi = environment.state.sensor_type_aoi_slots_array
+        scores = np.zeros(environment.scenario.pair_count, dtype=np.float64)
+        for pair in environment.scenario.sensor_pair_index.pairs:
+            scores[int(pair.pair_id)] = sensor_type_aoi[int(pair.sensor_type_id)]
+        selected_pair = int(feasible[int(np.argmax(scores[feasible]))])
         action[selected_pair] = 1.0
         action[-1] = 1.0
         return action

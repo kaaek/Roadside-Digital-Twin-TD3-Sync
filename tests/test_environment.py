@@ -110,3 +110,26 @@ def test_rollout_metrics():
     metrics = RolloutRunner().run_episode(env, GreedyWeightedAoiPolicy(), seed=1)
     assert metrics.average_weighted_aoi_float >= 0.0
     assert metrics.total_collected_bits_float >= 0.0
+
+
+def test_sensor_type_aoi_state_is_projected_to_pairs():
+    env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
+    env.reset(seed=1)
+    assert env.state.sensor_type_aoi_slots_array.shape == (env.scenario.sensor_type_count,)
+    projected_pair_aoi = env.scenario.project_sensor_type_values_to_pairs(
+        env.state.sensor_type_aoi_slots_array
+    )
+    assert np.allclose(env.state.aoi_slots_array, projected_pair_aoi)
+
+
+def test_weighted_aoi_uses_sensor_type_level_state():
+    env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
+    env.reset(seed=1)
+    action = GreedyWeightedAoiPolicy().select_action(env)
+    _, _, _, _, info = env.step(action)
+    active_sensor_type_mask = env.dynamics.get_active_sensor_type_mask(env.state)
+    expected_weighted_aoi = env.dynamics.objective.weighted_aoi_at_slot(
+        env.state.sensor_type_aoi_slots_array,
+        active_sensor_type_mask,
+    )
+    assert np.isclose(info["weighted_aoi_float"], expected_weighted_aoi)

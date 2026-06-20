@@ -29,6 +29,24 @@ class Scenario:
     def pair_count(self) -> int:
         return self.sensor_pair_index.pair_count()
 
+
+    @property
+    def sensor_type_count(self) -> int:
+        return len(self.sensor_types)
+
+    def priority_weight_array_by_sensor_type(self) -> np.ndarray:
+        return np.array([sensor.priority_weight for sensor in self.sensor_types], dtype=np.float64)
+
+    def sensing_delay_slots_array_by_sensor_type(self) -> np.ndarray:
+        return np.array([sensor.sensing_delay_slots for sensor in self.sensor_types], dtype=np.float64)
+
+    def sensor_type_index_array_by_pair(self) -> np.ndarray:
+        return np.array([int(pair.sensor_type_id) for pair in self.sensor_pair_index.pairs], dtype=np.int64)
+
+    def project_sensor_type_values_to_pairs(self, sensor_type_value_array: np.ndarray) -> np.ndarray:
+        values = np.asarray(sensor_type_value_array, dtype=np.float64)
+        return values[self.sensor_type_index_array_by_pair()]
+
     def priority_weight_array_by_pair(self) -> np.ndarray:
         sensor_weight_by_type = {int(sensor.sensor_type_id): sensor.priority_weight for sensor in self.sensor_types}
         return np.array([

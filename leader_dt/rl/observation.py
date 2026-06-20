@@ -48,7 +48,12 @@ class ObservationBuilder:
             active_pair_index_array = np.asarray(active_pair_indices, dtype=int)
             active_pair_index_array = active_pair_index_array[active_pair_index_array < pair_count]
             active_mask[active_pair_index_array] = True
-        aoi_normalized = np.clip(state.aoi_slots_array / max(system.freshness_threshold_slots, constants.EPSILON_FLOAT), 0.0, 1.0)
+        sensor_type_aoi_array = np.asarray(state.sensor_type_aoi_slots_array, dtype=np.float64)
+        if sensor_type_aoi_array.shape[0] == scenario.sensor_type_count:
+            pair_aoi_array = scenario.project_sensor_type_values_to_pairs(sensor_type_aoi_array)
+        else:
+            pair_aoi_array = state.aoi_slots_array
+        aoi_normalized = np.clip(pair_aoi_array / max(system.freshness_threshold_slots, constants.EPSILON_FLOAT), 0.0, 1.0)
         aoi_normalized = np.where(active_mask, aoi_normalized, 0.0)
         feasible_mask = np.zeros(pair_count, dtype=np.float64)
         feasible_pair_index_array = np.asarray(feasible_pair_indices, dtype=int)
@@ -73,8 +78,12 @@ class ObservationBuilder:
             0.0,
             1.0,
         )
-        if np.any(active_mask):
-            urgency_fraction = float(np.mean(state.aoi_slots_array[active_mask] >= 0.7 * system.freshness_threshold_slots))
+        active_sensor_type_mask = np.zeros(scenario.sensor_type_count, dtype=bool)
+        for pair in scenario.sensor_pair_index.pairs:
+            if active_mask[int(pair.pair_id)]:
+                active_sensor_type_mask[int(pair.sensor_type_id)] = True
+        if np.any(active_sensor_type_mask) and sensor_type_aoi_array.shape[0] == scenario.sensor_type_count:
+            urgency_fraction = float(np.mean(sensor_type_aoi_array[active_sensor_type_mask] >= 0.7 * system.freshness_threshold_slots))
         else:
             urgency_fraction = 0.0
         return np.concatenate([

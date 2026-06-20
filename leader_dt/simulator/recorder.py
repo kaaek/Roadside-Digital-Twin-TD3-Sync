@@ -18,6 +18,7 @@ class StepRecord:
     terminal_cpu_violation_count: int
     reward_float: float
     active_pair_count: int = 0
+    active_sensor_type_count: int = 0
 
 @dataclass
 class EpisodeRecord:

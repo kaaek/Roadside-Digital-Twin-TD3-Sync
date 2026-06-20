@@ -48,8 +48,11 @@ class RewardCalculator:
     ) -> RewardComponents:
         system = self.simulation_config.system
         weights = np.asarray(priority_weight_array, dtype=np.float64)
+        aoi_array = np.asarray(state_after_action.sensor_type_aoi_slots_array, dtype=np.float64)
+        if aoi_array.shape[0] != weights.shape[0]:
+            aoi_array = np.asarray(state_after_action.aoi_slots_array, dtype=np.float64)
         proximity_penalty = float(
-            np.sum(weights * np.maximum(0.0, state_after_action.aoi_slots_array - 0.5 * system.freshness_threshold_slots) ** 2)
+            np.sum(weights * np.maximum(0.0, aoi_array - 0.5 * system.freshness_threshold_slots) ** 2)
             / max(np.sum(weights) * system.freshness_threshold_slots, constants.EPSILON_FLOAT)
         )
         cpu_penalty = float(

@@ -8,6 +8,7 @@ around a Zone B defective-RSU simulation.
 ## Key modeling decisions
 
 - The scheduled entity is the exact sensor-vehicle pair `i ∈ I`.
+- Freshness and the weighted AoI objective are evaluated at the sensor-type level; pair decisions still determine the provider, wireless capacity, data size, CPU load, and accuracy.
 - Available data size `δ_i(t)` is sampled per pair and per slot.
 - Vehicles physically move through Zone B every slot.
 - Only Zone B is modeled in code.

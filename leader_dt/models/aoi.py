@@ -26,3 +26,13 @@ class AoiTransitionModel:
                 raise ValueError("active_pair_mask_array must have the same length as aoi_slots_array.")
             aoi_array = aoi_array[active_mask]
         return int(np.sum(aoi_array > self.freshness_threshold_slots))
+
+
+    def next_sensor_type_aoi_vector(self, current_aoi_slots_array: np.ndarray, scheduled_sensor_type_index: int | None, sensing_delay_slots_float: float = 0.0, transmission_delay_slots_float: float = 0.0, refresh_success_boolean: bool = False) -> np.ndarray:
+        return self.next_aoi_vector(
+            current_aoi_slots_array=current_aoi_slots_array,
+            scheduled_pair_index=scheduled_sensor_type_index,
+            sensing_delay_slots_float=sensing_delay_slots_float,
+            transmission_delay_slots_float=transmission_delay_slots_float,
+            refresh_success_boolean=refresh_success_boolean,
+        )

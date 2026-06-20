@@ -82,7 +82,7 @@ class LeaderSynchronizationEnv(gym.Env):
             state_after_action=next_state,
             action=scheduling_action,
             achieved_accuracy_float=transition_info["achieved_accuracy_float"],
-            priority_weight_array=self.scenario.priority_weight_array_by_pair(),
+            priority_weight_array=self.scenario.priority_weight_array_by_sensor_type(),
             weighted_aoi_float=transition_info["weighted_aoi_float"],
             freshness_violation_count_integer=transition_info["freshness_violation_count_integer"],
             accuracy_violation_count_integer=transition_info["accuracy_violation_count_integer"],
@@ -90,6 +90,7 @@ class LeaderSynchronizationEnv(gym.Env):
         )
         self.state = next_state
         active_pair_mask_array = self.dynamics.get_active_pair_mask(next_state)
+        active_sensor_type_mask_array = self.dynamics.get_active_sensor_type_mask(next_state)
         self.episode_record.append_step(
             StepRecord(
                 time_slot_index=next_state.time_slot_index,
@@ -104,9 +105,10 @@ class LeaderSynchronizationEnv(gym.Env):
                 terminal_cpu_violation_count=transition_info["terminal_cpu_violation_count_integer"],
                 reward_float=float(reward),
                 active_pair_count=transition_info.get("active_pair_count_integer", int(np.sum(active_pair_mask_array))),
+                active_sensor_type_count=transition_info.get("active_sensor_type_count_integer", int(np.sum(active_sensor_type_mask_array))),
             ),
-            next_state.aoi_slots_array,
-            active_pair_mask_array,
+            next_state.sensor_type_aoi_slots_array,
+            active_sensor_type_mask_array,
         )
         terminated = next_state.time_slot_index >= self.simulation_config.system.time_horizon_slots
         truncated = False

@@ -12,6 +12,7 @@ class SimulationState:
     cpu_backlog_cycles_float: float
     previous_cpu_added_cycles_float: float
     cpu_backlog_by_pair_cycles_array: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float64))
+    sensor_type_aoi_slots_array: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float64))
 
     def copy(self) -> "SimulationState":
         return SimulationState(
@@ -21,4 +22,5 @@ class SimulationState:
             cpu_backlog_cycles_float=float(self.cpu_backlog_cycles_float),
             previous_cpu_added_cycles_float=float(self.previous_cpu_added_cycles_float),
             cpu_backlog_by_pair_cycles_array=np.asarray(self.cpu_backlog_by_pair_cycles_array, dtype=np.float64).copy(),
+            sensor_type_aoi_slots_array=np.asarray(self.sensor_type_aoi_slots_array, dtype=np.float64).copy(),
         )
