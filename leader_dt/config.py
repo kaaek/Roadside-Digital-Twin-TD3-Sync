@@ -67,6 +67,27 @@ class Td3TrainingConfig:
     critic_hidden_layers: tuple[int, int] = constants.DEFAULT_CRITIC_HIDDEN_LAYERS
     device: str = constants.DEFAULT_DEVICE
 
+
+@dataclass(frozen=True)
+class Td3ConvergenceTrainingConfig:
+    """Controls evaluation-driven TD3 training and early stopping.
+
+    The values live in ``leader_dt.constants`` so training scripts can be
+    changed from one place without scattering experiment parameters.
+    """
+
+    eval_frequency_steps: int = constants.DEFAULT_TD3_CONVERGENCE_EVAL_FREQUENCY_STEPS
+    evaluation_episode_count: int = constants.DEFAULT_TD3_CONVERGENCE_EVALUATION_EPISODES
+    patience_evaluation_count: int = constants.DEFAULT_TD3_CONVERGENCE_PATIENCE_EVALUATIONS
+    minimum_training_timesteps: int = constants.DEFAULT_TD3_CONVERGENCE_MINIMUM_TIMESTEPS
+    maximum_training_timesteps: int = constants.DEFAULT_TD3_CONVERGENCE_MAXIMUM_TIMESTEPS
+    minimum_reward_improvement_float: float = constants.DEFAULT_TD3_CONVERGENCE_MINIMUM_REWARD_IMPROVEMENT
+    evaluation_seed_start: int = constants.DEFAULT_TD3_CONVERGENCE_EVALUATION_SEED_START
+    sb3_log_interval: int = constants.DEFAULT_TD3_CONVERGENCE_SB3_LOG_INTERVAL
+    output_directory: str = constants.DEFAULT_TD3_CONVERGENCE_OUTPUT_DIRECTORY
+    best_model_name: str = constants.DEFAULT_TD3_CONVERGENCE_BEST_MODEL_NAME
+    latest_model_name: str = constants.DEFAULT_TD3_CONVERGENCE_LATEST_MODEL_NAME
+
 @dataclass(frozen=True)
 class MonteCarloConfig:
     trial_count: int = constants.DEFAULT_MONTE_CARLO_TRIAL_COUNT
