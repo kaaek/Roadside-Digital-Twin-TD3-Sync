@@ -100,6 +100,13 @@ DEFAULT_SENSOR_DEFINITIONS: tuple[dict, ...] = (
 )
 DEFAULT_TOTAL_TIMESTEPS: int = 500_000
 
+# CPU-aware Greedy baseline defaults. ``lambda`` is interpreted as a
+# score-space penalty coefficient in weighted-AoI units per normalized CPU
+# backlog slot. The requested accuracy fraction controls how much of a
+# pair's available payload the Greedy policy asks to upload.
+DEFAULT_GREEDY_CPU_LAMBDA: float = 5.0
+DEFAULT_GREEDY_REQUESTED_ACCURACY_FRACTION: float = 1.0
+
 # TD3 convergence-training defaults.  These are intentionally centralized so
 # convergence experiments, CLI defaults, reports, and plots all stay aligned.
 DEFAULT_TD3_CONVERGENCE_EVAL_FREQUENCY_STEPS: int = 25_000
