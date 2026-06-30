@@ -53,6 +53,8 @@ class SimulationConfig:
 
 @dataclass(frozen=True)
 class Td3TrainingConfig:
+    """Stable-Baselines3 TD3 hyperparameters and logging controls."""
+
     total_timesteps: int = constants.DEFAULT_TOTAL_TIMESTEPS
     learning_rate: float = constants.DEFAULT_LEARNING_RATE
     learning_starts: int = constants.DEFAULT_LEARNING_STARTS
@@ -63,6 +65,13 @@ class Td3TrainingConfig:
     policy_delay: int = constants.DEFAULT_POLICY_DELAY
     train_frequency_steps: int = constants.DEFAULT_TRAIN_FREQUENCY_STEPS
     gradient_steps: int = constants.DEFAULT_GRADIENT_STEPS
+    action_noise_sigma: float = constants.DEFAULT_ACTION_NOISE_SIGMA
+    target_policy_noise: float = constants.DEFAULT_TARGET_POLICY_NOISE
+    target_noise_clip: float = constants.DEFAULT_TARGET_NOISE_CLIP
+    tensorboard_log_directory: str = constants.DEFAULT_TENSORBOARD_LOG_DIRECTORY
+    monitor_log_directory: str = constants.DEFAULT_MONITOR_LOG_DIRECTORY
+    checkpoint_frequency_steps: int = constants.DEFAULT_TD3_CHECKPOINT_FREQUENCY_STEPS
+    checkpoint_output_directory: str = constants.DEFAULT_TD3_CHECKPOINT_OUTPUT_DIRECTORY
     actor_hidden_layers: tuple[int, int] = constants.DEFAULT_ACTOR_HIDDEN_LAYERS
     critic_hidden_layers: tuple[int, int] = constants.DEFAULT_CRITIC_HIDDEN_LAYERS
     device: str = constants.DEFAULT_DEVICE
@@ -87,6 +96,7 @@ class Td3ConvergenceTrainingConfig:
     output_directory: str = constants.DEFAULT_TD3_CONVERGENCE_OUTPUT_DIRECTORY
     best_model_name: str = constants.DEFAULT_TD3_CONVERGENCE_BEST_MODEL_NAME
     latest_model_name: str = constants.DEFAULT_TD3_CONVERGENCE_LATEST_MODEL_NAME
+    checkpoint_frequency_steps: int = constants.DEFAULT_TD3_CHECKPOINT_FREQUENCY_STEPS
 
 @dataclass(frozen=True)
 class MonteCarloConfig:

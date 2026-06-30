@@ -31,6 +31,7 @@ from leader_dt.plotting.convergence_plots import plot_td3_convergence  # noqa: E
 from leader_dt.rl.td3_agent import Td3Trainer  # noqa: E402
 from leader_dt.rl.wrappers import Td3PolicyWrapper  # noqa: E402
 from leader_dt.simulator.environment import LeaderSynchronizationEnv  # noqa: E402
+from stable_baselines3.common.monitor import Monitor  # noqa: E402
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -112,6 +113,17 @@ def parse_arguments() -> argparse.Namespace:
         default=training_defaults.train_frequency_steps,
     )
     parser.add_argument("--gradient-steps", type=int, default=training_defaults.gradient_steps)
+    parser.add_argument("--action-noise-sigma", type=float, default=training_defaults.action_noise_sigma)
+    parser.add_argument("--target-policy-noise", type=float, default=training_defaults.target_policy_noise)
+    parser.add_argument("--target-noise-clip", type=float, default=training_defaults.target_noise_clip)
+    parser.add_argument("--tensorboard-log-dir", type=str, default=training_defaults.tensorboard_log_directory)
+    parser.add_argument("--monitor-log-dir", type=str, default=training_defaults.monitor_log_directory)
+    parser.add_argument(
+        "--checkpoint-frequency-steps",
+        type=int,
+        default=convergence_defaults.checkpoint_frequency_steps,
+    )
+    parser.add_argument("--checkpoint-output-dir", type=str, default=training_defaults.checkpoint_output_directory)
     parser.add_argument("--device", type=str, default=training_defaults.device)
     return parser.parse_args()
 
@@ -128,6 +140,13 @@ def build_training_config(args: argparse.Namespace) -> Td3TrainingConfig:
         policy_delay=args.policy_delay,
         train_frequency_steps=args.train_frequency_steps,
         gradient_steps=args.gradient_steps,
+        action_noise_sigma=args.action_noise_sigma,
+        target_policy_noise=args.target_policy_noise,
+        target_noise_clip=args.target_noise_clip,
+        tensorboard_log_directory=args.tensorboard_log_dir,
+        monitor_log_directory=args.monitor_log_dir,
+        checkpoint_frequency_steps=args.checkpoint_frequency_steps,
+        checkpoint_output_directory=args.checkpoint_output_dir,
         device=args.device,
     )
 
@@ -145,6 +164,7 @@ def build_convergence_config(args: argparse.Namespace) -> Td3ConvergenceTraining
         output_directory=args.output_dir,
         best_model_name=args.best_model_name,
         latest_model_name=args.latest_model_name,
+        checkpoint_frequency_steps=args.checkpoint_frequency_steps,
     )
 
 
@@ -161,6 +181,8 @@ def validate_convergence_config(config: Td3ConvergenceTrainingConfig) -> None:
         raise ValueError("maximum_training_timesteps must be positive.")
     if config.maximum_training_timesteps < config.minimum_training_timesteps:
         raise ValueError("maximum_training_timesteps must be >= minimum_training_timesteps.")
+    if config.checkpoint_frequency_steps < 0:
+        raise ValueError("checkpoint_frequency_steps cannot be negative.")
 
 
 def make_json_safe(value: Any) -> Any:
@@ -197,8 +219,8 @@ def evaluate_td3_model(
         seed_start=convergence_config.evaluation_seed_start,
     )
 
-    def environment_factory() -> LeaderSynchronizationEnv:
-        return LeaderSynchronizationEnv(simulation_config)
+    def environment_factory():
+        return Monitor(LeaderSynchronizationEnv(simulation_config), filename=None)
 
     policy = Td3PolicyWrapper(model, deterministic=True)
     result = evaluator.evaluate_policy("TD3", policy, environment_factory)
@@ -225,6 +247,14 @@ def print_startup_summary(
     print(f"maximum_training_timesteps: {convergence_config.maximum_training_timesteps}", flush=True)
     print(f"minimum_reward_improvement: {convergence_config.minimum_reward_improvement_float}", flush=True)
     print(f"learning_rate: {training_config.learning_rate}", flush=True)
+    print(f"buffer_size: {training_config.buffer_size}", flush=True)
+    print(f"batch_size: {training_config.batch_size}", flush=True)
+    print(f"action_noise_sigma: {training_config.action_noise_sigma}", flush=True)
+    print(f"target_policy_noise: {training_config.target_policy_noise}", flush=True)
+    print(f"target_noise_clip: {training_config.target_noise_clip}", flush=True)
+    print(f"tensorboard_log_directory: {training_config.tensorboard_log_directory}", flush=True)
+    print(f"monitor_log_directory: {training_config.monitor_log_directory}", flush=True)
+    print(f"checkpoint_frequency_steps: {convergence_config.checkpoint_frequency_steps}", flush=True)
     print(f"device: {training_config.device}", flush=True)
     print("=" * 80, flush=True)
 
@@ -240,9 +270,11 @@ def main() -> None:
     models_dir = output_dir / "models"
     metrics_dir = output_dir / "metrics"
     plots_dir = output_dir / "plots"
+    checkpoints_dir = output_dir / "checkpoints"
     models_dir.mkdir(parents=True, exist_ok=True)
     metrics_dir.mkdir(parents=True, exist_ok=True)
     plots_dir.mkdir(parents=True, exist_ok=True)
+    checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
     print_startup_summary(simulation_config, training_config, convergence_config, output_dir)
 
@@ -255,6 +287,7 @@ def main() -> None:
     trained_timesteps = 0
     evaluation_index = 0
     history: list[dict[str, Any]] = []
+    saved_checkpoint_timesteps: set[int] = set()
     start_time = time.time()
 
     best_model_path = models_dir / convergence_config.best_model_name
@@ -310,6 +343,16 @@ def main() -> None:
             improvement_text = "no improvement"
 
         model.save(str(latest_model_path))
+        checkpoint_saved_path: str | None = None
+        if (
+            convergence_config.checkpoint_frequency_steps > 0
+            and trained_timesteps % convergence_config.checkpoint_frequency_steps == 0
+            and trained_timesteps not in saved_checkpoint_timesteps
+        ):
+            checkpoint_path = checkpoints_dir / f"td3_checkpoint_{trained_timesteps}_steps"
+            model.save(str(checkpoint_path))
+            checkpoint_saved_path = f"{checkpoint_path}.zip"
+            saved_checkpoint_timesteps.add(trained_timesteps)
 
         history_row = {
             "evaluation_index": evaluation_index,
@@ -324,6 +367,7 @@ def main() -> None:
             "best_timestep": best_timestep,
             "evaluations_without_improvement": evaluations_without_improvement,
             "elapsed_seconds": elapsed_seconds,
+            "checkpoint_saved_path": checkpoint_saved_path,
         }
         history.append(history_row)
         save_evaluation_history(history, history_json_path, history_csv_path)
@@ -358,6 +402,8 @@ def main() -> None:
             flush=True,
         )
         print(f"Saved latest model: {latest_model_path}.zip", flush=True)
+        if checkpoint_saved_path is not None:
+            print(f"Saved periodic checkpoint: {checkpoint_saved_path}", flush=True)
         if improved:
             print(f"Saved new best model: {best_model_path}.zip", flush=True)
         print(f"Saved history: {history_json_path}", flush=True)
@@ -404,6 +450,7 @@ def main() -> None:
     print(f"History CSV: {history_csv_path}", flush=True)
     print(f"Reward plot: {reward_plot_path}", flush=True)
     print(f"AoI plot: {aoi_plot_path}", flush=True)
+    print(f"Periodic checkpoints directory: {checkpoints_dir}", flush=True)
 
 
 if __name__ == "__main__":
