@@ -1,0 +1,49 @@
+{
+  "config_used": {
+    "system": {
+      "time_horizon_slots": 40,
+      "slot_duration_seconds": 1.0,
+      "vehicle_count": 40,
+      "sensor_type_count": 8,
+      "sensors_per_vehicle": 4,
+      "freshness_threshold_slots": 10,
+      "accuracy_threshold": 0.8,
+      "leader_cpu_frequency_cycles_per_second": 1500000.0,
+      "include_leader_as_provider": true,
+      "max_vehicle_count_for_action_space": 80,
+      "max_sensors_per_vehicle_for_action_space": 4
+    },
+    "communication": {
+      "uplink_bandwidth_hz": 600000.0,
+      "max_transmit_power_watt": 1.0,
+      "noise_power_spectral_density_watt_per_hz": 1e-12,
+      "pathloss_exponent": 2.5,
+      "reference_distance_meter": 1.0
+    },
+    "road": {
+      "lane_length_meter": 2000.0,
+      "defective_zone_start_meter": 500.0,
+      "defective_zone_end_meter": 2500.0,
+      "vehicle_speed_meter_per_second": 15.0,
+      "vehicle_speed_jitter_std_meter_per_second": 1.0
+    },
+    "data_generation": {
+      "low_multiplier": 0.8,
+      "high_multiplier": 1.2
+    },
+    "random_seed": 50000
+  },
+  "seed_used": 50000,
+  "model_path": "results/td3_zone_2km_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip",
+  "training_hyperparameters": {
+    "greedy_lambda_cpu": 5.0,
+    "greedy_requested_accuracy_fraction": 1.0
+  },
+  "metrics_json_path": "results/td3_zone_2km_3m_sigma005_seed1/final_monte_carlo/monte_carlo_metrics.json",
+  "metrics_csv_path": "results/td3_zone_2km_3m_sigma005_seed1/final_monte_carlo/monte_carlo_metrics.csv",
+  "plot_paths": [
+    "results/plots/monte_carlo_comparison.png",
+    "results/plots/policy_consistency_distribution.png"
+  ],
+  "notes": []
+}

@@ -1,0 +1,95 @@
+{
+  "config_used": {
+    "system": {
+      "time_horizon_slots": 40,
+      "slot_duration_seconds": 1.0,
+      "vehicle_count": 40,
+      "sensor_type_count": 8,
+      "sensors_per_vehicle": 4,
+      "freshness_threshold_slots": 10,
+      "accuracy_threshold": 0.8,
+      "leader_cpu_frequency_cycles_per_second": 1500000.0,
+      "include_leader_as_provider": true,
+      "max_vehicle_count_for_action_space": 80,
+      "max_sensors_per_vehicle_for_action_space": 4
+    },
+    "communication": {
+      "uplink_bandwidth_hz": 600000.0,
+      "max_transmit_power_watt": 1.0,
+      "noise_power_spectral_density_watt_per_hz": 1e-12,
+      "pathloss_exponent": 2.5,
+      "reference_distance_meter": 1.0
+    },
+    "road": {
+      "lane_length_meter": 2000.0,
+      "defective_zone_start_meter": 500.0,
+      "defective_zone_end_meter": 2500.0,
+      "vehicle_speed_meter_per_second": 15.0,
+      "vehicle_speed_jitter_std_meter_per_second": 1.0
+    },
+    "data_generation": {
+      "low_multiplier": 0.8,
+      "high_multiplier": 1.2
+    },
+    "random_seed": 1
+  },
+  "seed_used": 1,
+  "model_path": "results/td3_zone_2km_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b",
+  "training_hyperparameters": {
+    "td3_training_config": {
+      "total_timesteps": 3000000,
+      "learning_rate": 0.0005,
+      "learning_starts": 10000,
+      "buffer_size": 1000000,
+      "batch_size": 256,
+      "gamma": 0.99,
+      "tau": 0.005,
+      "policy_delay": 2,
+      "train_frequency_steps": 10,
+      "gradient_steps": 1,
+      "action_noise_sigma": 0.05,
+      "target_policy_noise": 0.2,
+      "target_noise_clip": 0.3,
+      "tensorboard_log_directory": "results/td3_zone_2km_3m_sigma005_seed1/tensorboard",
+      "monitor_log_directory": "results/td3_zone_2km_3m_sigma005_seed1/monitor",
+      "checkpoint_frequency_steps": 250000,
+      "checkpoint_output_directory": "results/checkpoints",
+      "actor_hidden_layers": [
+        64,
+        64
+      ],
+      "critic_hidden_layers": [
+        64,
+        64
+      ],
+      "device": "cpu"
+    },
+    "td3_convergence_training_config": {
+      "eval_frequency_steps": 100000,
+      "evaluation_episode_count": 50,
+      "patience_evaluation_count": 999999,
+      "minimum_training_timesteps": 3000000,
+      "maximum_training_timesteps": 3000000,
+      "minimum_reward_improvement_float": 50.0,
+      "evaluation_seed_start": 10000,
+      "sb3_log_interval": 10,
+      "output_directory": "results/td3_zone_2km_3m_sigma005_seed1",
+      "best_model_name": "best_td3_exact_pair_zone_b",
+      "latest_model_name": "latest_td3_exact_pair_zone_b",
+      "checkpoint_frequency_steps": 250000
+    },
+    "best_mean_episode_return_float": -5687.138227876442,
+    "best_timestep": 2900000,
+    "final_timestep": 3000000
+  },
+  "metrics_json_path": "results/td3_zone_2km_3m_sigma005_seed1/metrics/td3_convergence_history.json",
+  "metrics_csv_path": "results/td3_zone_2km_3m_sigma005_seed1/metrics/td3_convergence_history.csv",
+  "plot_paths": [
+    "results/td3_zone_2km_3m_sigma005_seed1/plots/td3_evaluation_reward_convergence.png",
+    "results/td3_zone_2km_3m_sigma005_seed1/plots/td3_evaluation_aoi_convergence.png"
+  ],
+  "notes": [
+    "Best model is selected by highest mean evaluation episode return.",
+    "Evaluation uses the same TD3 policy wrapper as Monte Carlo evaluation."
+  ]
+}
