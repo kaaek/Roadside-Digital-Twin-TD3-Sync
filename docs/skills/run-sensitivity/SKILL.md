@@ -1,91 +1,87 @@
 # Skill: Run Sensitivity Sweeps
 
-## Trigger
-
-Use this skill when the user asks for robustness tests, parameter sweeps, environmental sensitivity, or commands for specific parameter sweeps.
+Refer to this document to perform robustness tests, parameter sweeps, sensitivity plots, thesis-style sensitivity figures, or commands for specific environment-parameter sweeps.
 
 ## Relevant Files
 
 - `scripts/run_sensitivity.py`
+- `leader_dt/evaluation/policy_factory.py`
 - `leader_dt/evaluation/sensitivity.py`
 - `leader_dt/plotting/sensitivity_plots.py`
+- `leader_dt/plotting/thesis_style.py`
 - `leader_dt/config.py`
 - `leader_dt/constants.py`
 
-## Command Template
+## Default Policy Set
+
+Use:
+
+```text
+Greedy
+TD3
+PPO
+```
+
+## Thesis Plotting Requirement
+
+Sensitivity plots must use the project thesis style by default through `leader_dt/plotting/sensitivity_plots.py`. The user should not need a CLI flag. Plots should use SciencePlots, grid styling, serif fonts, accessible colors, distinct markers/linestyles, tight bounding boxes, and PDF export.
+
+## Model Path Setup
+
+```bash
+TD3_MODEL="results/td3_zone_2km_3m_seed1_gpu/models/best_td3_exact_pair_zone_b.zip"
+PPO_MODEL="results/ppo_zone_2km_3m_seed1_cpu/models/best_ppo_exact_pair_zone_b.zip"
+TRIALS=500
+SEED_START=50000
+```
+
+## Task Size Sweep
+
+`data_size_high_multiplier` must be greater than or equal to the configured low multiplier. If the default low multiplier is `0.8`, do not sweep below `0.8`.
 
 ```bash
 python scripts/run_sensitivity.py \
   --parameter data_size_high_multiplier \
-  --values 1.0,1.5,2.0,3.0 \
-  --trials 500 \
-  --seed-start 50000 \
-  --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip \
-  --greedy-lambda-cpu 5 \
-  --greedy-requested-accuracy-fraction 1.0 \
-  --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_data_pressure
+  --values 0.8,1.0,1.2,1.4,1.6,1.8,2.0,2.3,2.6,3.0,3.4,3.8,4.2,4.8,5.4,6.0,6.8,7.6,8.4,9.2 \
+  --trials "$TRIALS" \
+  --seed-start "$SEED_START" \
+  --td3-model-path "$TD3_MODEL" \
+  --ppo-model-path "$PPO_MODEL" \
+  --output-dir results/sensitivity_final_task_size_20_values
 ```
 
-## Recommended Sweeps
+## Sensors Per Vehicle Sweep
 
-### Defective Zone Size
+Use integer values only. The valid range depends on the maximum sensors-per-vehicle and number of sensor types configured in the action/observation space.
 
 ```bash
-python scripts/run_sensitivity.py --parameter zone_size_meter --values 200,400,800,1200,2000,3000 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_zone_size
+python scripts/run_sensitivity.py \
+  --parameter sensors_per_vehicle \
+  --values 1,2,3,4,5,6,7,8 \
+  --trials "$TRIALS" \
+  --seed-start "$SEED_START" \
+  --td3-model-path "$TD3_MODEL" \
+  --ppo-model-path "$PPO_MODEL" \
+  --output-dir results/sensitivity_final_sensors_per_vehicle
 ```
 
-### Freshness Threshold
+## Accuracy Threshold Sweep
 
 ```bash
-python scripts/run_sensitivity.py --parameter freshness_threshold_slots --values 6,8,10,12,15,20 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_freshness
-```
-
-### Vehicle Count
-
-```bash
-python scripts/run_sensitivity.py --parameter vehicle_count --values 10,20,40,60,80 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_vehicle_count
-```
-
-### Data Size / CPU Pressure
-
-```bash
-python scripts/run_sensitivity.py --parameter data_size_high_multiplier --values 1.0,1.2,1.5,2.0,3.0,4.0 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_data_pressure
-```
-
-### Vehicle Speed
-
-```bash
-python scripts/run_sensitivity.py --parameter vehicle_speed_meter_per_second --values 5,10,15,20,30,40,50 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_speed
-```
-
-### Sensors Per Vehicle
-
-```bash
-python scripts/run_sensitivity.py --parameter sensors_per_vehicle --values 1,2,3,4 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_sensors_per_vehicle
-```
-
-### Uplink Bandwidth
-
-```bash
-python scripts/run_sensitivity.py --parameter uplink_bandwidth_hz --values 150000,300000,600000,900000,1200000,1800000 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_bandwidth
-```
-
-### Accuracy Threshold
-
-```bash
-python scripts/run_sensitivity.py --parameter accuracy_threshold --values 0.6,0.7,0.8,0.9,1.0 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_accuracy
-```
-
-### Time Horizon
-
-```bash
-python scripts/run_sensitivity.py --parameter time_horizon_slots --values 20,40,60,80,100 --trials 500 --seed-start 50000 --model-path results/td3_tuned_3m_sigma005_seed1/models/best_td3_exact_pair_zone_b.zip --greedy-lambda-cpu 5 --greedy-requested-accuracy-fraction 1.0 --output-dir results/td3_tuned_3m_sigma005_seed1/sensitivity_horizon
+python scripts/run_sensitivity.py \
+  --parameter accuracy_threshold \
+  --values 0.05,0.10,0.15,0.20,0.25,0.30,0.35,0.40,0.45,0.50,0.55,0.60,0.65,0.70,0.75,0.80,0.85,0.90,0.95,1.00 \
+  --trials "$TRIALS" \
+  --seed-start "$SEED_START" \
+  --td3-model-path "$TD3_MODEL" \
+  --ppo-model-path "$PPO_MODEL" \
+  --output-dir results/sensitivity_final_accuracy_threshold_20_values
 ```
 
 ## Rules
 
 - Sweep one parameter at a time.
-- Use the same model path and seed range across sensitivity points.
-- Do not retrain TD3 inside sensitivity sweeps unless explicitly requested.
-- Keep Greedy parameters fixed during environment sweeps.
-- Use a separate `--output-dir` for each parameter.
+- Keep TD3/PPO model paths fixed across values.
+- Use the same seed range for all policies and parameter values.
+- Do not retrain inside a sensitivity sweep unless explicitly studying retraining.
+- Plot additional metrics such as freshness violations, accuracy violations, and CPU backlog when AoI saturates or appears flat.

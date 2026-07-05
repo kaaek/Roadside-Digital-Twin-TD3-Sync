@@ -1,24 +1,32 @@
 # Skill: Train TD3
 
-## Trigger
-
-Use this skill when the user asks to train TD3, tune TD3 hyperparameters, run a shorter/faster training experiment, reproduce a nuclear run, or generate convergence outputs.
+Refer to this document to train TD3, tune TD3 hyperparameters, run GPU/CPU benchmarks, generate convergence outputs, or explain TD3 training behavior.
 
 ## Relevant Files
 
 - `leader_dt/rl/td3_agent.py`
-- `leader_dt/rl/reward.py`
 - `leader_dt/rl/observation.py`
+- `leader_dt/rl/reward.py`
+- `leader_dt/rl/wrappers.py`
 - `leader_dt/config.py`
 - `leader_dt/constants.py`
 - `scripts/train_td3.py`
 - `scripts/train_td3_until_convergence.py`
 - `leader_dt/plotting/convergence_plots.py`
 
-## Training Command Template
+## Explanation Format for Code Questions
+
+1. One-sentence summary of what TD3 training code does.
+2. High-level explanation of environment, actor, critics, replay buffer, action noise, and evaluation loop.
+3. Block-by-block explanation of config, environment construction, model construction, training chunks, evaluation, checkpointing, and saved outputs.
+4. Real-world analogy: TD3 is a trainee dispatcher learning from many simulated RSU-failure episodes which sensor provider to schedule and how much accuracy to request.
+
+## Full TD3 Training Command
 
 ```bash
-python scripts/train_td3_until_convergence.py \
+mkdir -p results/td3_zone_2km_3m_seed1_gpu
+
+nohup python scripts/train_td3_until_convergence.py \
   --seed 1 \
   --maximum-timesteps 3000000 \
   --minimum-timesteps 3000000 \
@@ -32,66 +40,48 @@ python scripts/train_td3_until_convergence.py \
   --buffer-size 1000000 \
   --batch-size 256 \
   --checkpoint-frequency-steps 250000 \
-  --output-dir results/td3_tuned_3m_sigma005_seed1 \
-  --tensorboard-log-dir results/td3_tuned_3m_sigma005_seed1/tensorboard \
-  --monitor-log-dir results/td3_tuned_3m_sigma005_seed1/monitor
+  --device cuda \
+  --output-dir results/td3_zone_2km_3m_seed1_gpu \
+  --tensorboard-log-dir results/td3_zone_2km_3m_seed1_gpu/tensorboard \
+  --monitor-log-dir results/td3_zone_2km_3m_seed1_gpu/monitor \
+  > results/td3_zone_2km_3m_seed1_gpu/training_stdout.log 2>&1 &
 ```
 
-## Quick Smoke Command
+## Smoke Command
 
 ```bash
 python scripts/train_td3_until_convergence.py \
   --seed 1 \
-  --maximum-timesteps 200000 \
+  --maximum-timesteps 100000 \
   --minimum-timesteps 100000 \
   --eval-frequency-steps 50000 \
-  --evaluation-episodes 10 \
-  --patience-evaluations 5 \
+  --evaluation-episodes 5 \
+  --patience-evaluations 999999 \
   --action-noise-sigma 0.05 \
   --target-policy-noise 0.20 \
   --target-noise-clip 0.30 \
   --buffer-size 1000000 \
   --batch-size 256 \
   --checkpoint-frequency-steps 50000 \
-  --output-dir results/td3_smoke_sigma005_seed1 \
-  --tensorboard-log-dir results/td3_smoke_sigma005_seed1/tensorboard \
-  --monitor-log-dir results/td3_smoke_sigma005_seed1/monitor
+  --device cuda \
+  --output-dir results/td3_smoke_seed1_gpu \
+  --tensorboard-log-dir results/td3_smoke_seed1_gpu/tensorboard \
+  --monitor-log-dir results/td3_smoke_seed1_gpu/monitor
 ```
 
-## Tuning Guidelines
+## Outputs
 
-- Prefer `--action-noise-sigma 0.05` and `0.10` for tuned tests.
-- Prefer `--buffer-size 1000000` for serious runs.
-- Prefer `--batch-size 256`; use `512` if runtime is acceptable.
-- Keep `--target-policy-noise 0.20` and `--target-noise-clip 0.30` explicit.
-- Use `--minimum-timesteps` equal to `--maximum-timesteps` when the user wants no early stopping.
-- Use `--evaluation-episodes 50` for shorter serious runs and `100` for stronger convergence diagnostics.
+- `results/<run>/models/best_td3_exact_pair_zone_b.zip`
+- `results/<run>/models/latest_td3_exact_pair_zone_b.zip`
+- `results/<run>/metrics/td3_convergence_history.json`
+- `results/<run>/metrics/td3_convergence_history.csv`
+- `results/<run>/plots/td3_evaluation_reward_convergence.png`
+- `results/<run>/plots/td3_evaluation_aoi_convergence.png`
+- `results/<run>/td3_convergence_training_report.json`
 
-## Outputs to Check
+## Interpretation Rules
 
-- `models/best_td3_exact_pair_zone_b.zip`
-- `models/latest_td3_exact_pair_zone_b.zip`
-- `metrics/td3_convergence_history.json`
-- `metrics/td3_convergence_history.csv`
-- `td3_convergence_training_report.json`
-- `plots/td3_evaluation_reward_convergence.png`
-- `plots/td3_evaluation_aoi_convergence.png`
-- `checkpoints/td3_checkpoint_*_steps.zip`
-- `tensorboard/`
-- `monitor/`
-
-## Validation
-
-Run after code changes:
-
-```bash
-python -m compileall -q leader_dt scripts tests
-pytest -q
-```
-
-## Common Pitfalls
-
-- Do not claim convergence from a jagged raw reward plot.
-- Do not compare TD3 against Greedy using different seed ranges.
-- Do not forget to run Monte Carlo after training; training reward is not enough.
-- If `best_td3_exact_pair_zone_b.zip` is missing, inspect the convergence script output directory and training log.
+- Use the best model for final Monte Carlo unless the user explicitly wants latest-model analysis.
+- Do not claim convergence from raw reward only.
+- Report smoothed reward plus AoI, freshness violations, CPU backlog, and accuracy violations.
+- TD3 can use GPU if local benchmarking shows speedup.
