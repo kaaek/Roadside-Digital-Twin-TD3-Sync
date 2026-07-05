@@ -99,6 +99,48 @@ class Td3ConvergenceTrainingConfig:
     checkpoint_frequency_steps: int = constants.DEFAULT_TD3_CHECKPOINT_FREQUENCY_STEPS
 
 @dataclass(frozen=True)
+class PpoTrainingConfig:
+    """Stable-Baselines3 PPO hyperparameters and logging controls."""
+
+    total_timesteps: int = constants.DEFAULT_PPO_TOTAL_TIMESTEPS
+    learning_rate: float = constants.DEFAULT_PPO_LEARNING_RATE
+    n_steps: int = constants.DEFAULT_PPO_N_STEPS
+    batch_size: int = constants.DEFAULT_PPO_BATCH_SIZE
+    n_epochs: int = constants.DEFAULT_PPO_N_EPOCHS
+    gamma: float = constants.DEFAULT_PPO_GAMMA
+    gae_lambda: float = constants.DEFAULT_PPO_GAE_LAMBDA
+    clip_range: float = constants.DEFAULT_PPO_CLIP_RANGE
+    ent_coef: float = constants.DEFAULT_PPO_ENT_COEF
+    vf_coef: float = constants.DEFAULT_PPO_VF_COEF
+    max_grad_norm: float = constants.DEFAULT_PPO_MAX_GRAD_NORM
+    tensorboard_log_directory: str = constants.DEFAULT_PPO_TENSORBOARD_LOG_DIRECTORY
+    monitor_log_directory: str = constants.DEFAULT_PPO_MONITOR_LOG_DIRECTORY
+    checkpoint_frequency_steps: int = constants.DEFAULT_PPO_CHECKPOINT_FREQUENCY_STEPS
+    checkpoint_output_directory: str = constants.DEFAULT_PPO_CHECKPOINT_OUTPUT_DIRECTORY
+    actor_hidden_layers: tuple[int, int] = constants.DEFAULT_ACTOR_HIDDEN_LAYERS
+    critic_hidden_layers: tuple[int, int] = constants.DEFAULT_CRITIC_HIDDEN_LAYERS
+    device: str = constants.DEFAULT_DEVICE
+
+
+@dataclass(frozen=True)
+class PpoConvergenceTrainingConfig:
+    """Controls evaluation-driven PPO training and early stopping."""
+
+    eval_frequency_steps: int = constants.DEFAULT_PPO_CONVERGENCE_EVAL_FREQUENCY_STEPS
+    evaluation_episode_count: int = constants.DEFAULT_PPO_CONVERGENCE_EVALUATION_EPISODES
+    patience_evaluation_count: int = constants.DEFAULT_PPO_CONVERGENCE_PATIENCE_EVALUATIONS
+    minimum_training_timesteps: int = constants.DEFAULT_PPO_CONVERGENCE_MINIMUM_TIMESTEPS
+    maximum_training_timesteps: int = constants.DEFAULT_PPO_CONVERGENCE_MAXIMUM_TIMESTEPS
+    minimum_reward_improvement_float: float = constants.DEFAULT_PPO_CONVERGENCE_MINIMUM_REWARD_IMPROVEMENT
+    evaluation_seed_start: int = constants.DEFAULT_PPO_CONVERGENCE_EVALUATION_SEED_START
+    sb3_log_interval: int = constants.DEFAULT_PPO_CONVERGENCE_SB3_LOG_INTERVAL
+    output_directory: str = constants.DEFAULT_PPO_CONVERGENCE_OUTPUT_DIRECTORY
+    best_model_name: str = constants.DEFAULT_PPO_CONVERGENCE_BEST_MODEL_NAME
+    latest_model_name: str = constants.DEFAULT_PPO_CONVERGENCE_LATEST_MODEL_NAME
+    checkpoint_frequency_steps: int = constants.DEFAULT_PPO_CHECKPOINT_FREQUENCY_STEPS
+
+
+@dataclass(frozen=True)
 class MonteCarloConfig:
     trial_count: int = constants.DEFAULT_MONTE_CARLO_TRIAL_COUNT
     seed_start: int = constants.DEFAULT_SEED_START

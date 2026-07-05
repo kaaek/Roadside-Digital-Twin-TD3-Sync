@@ -1,8 +1,10 @@
-"""Run Monte Carlo evaluation for available policies.
+"""Run Monte Carlo evaluation for baselines, TD3, and PPO policies.
 
 The Greedy baseline used here is CPU-aware by default. Its CPU penalty and
-requested accuracy fraction can be overridden from the command line for direct
-comparison with TD3 under different heuristic assumptions.
+requested accuracy fraction can be overridden from the command line. The script
+keeps the historical ``--model-path`` argument as a TD3 checkpoint alias while
+adding explicit ``--td3-model-path`` and ``--ppo-model-path`` arguments for
+multi-RL-model comparisons.
 """
 from __future__ import annotations
 
@@ -15,44 +17,36 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from leader_dt import constants
-from leader_dt.baselines.greedy import GreedyWeightedAoiPolicy
-from leader_dt.baselines.no_refresh import NoRefreshPolicy
-from leader_dt.baselines.random_policy import RandomPolicy
 from leader_dt.config import MonteCarloConfig, SimulationConfig
 from leader_dt.evaluation.monte_carlo import MonteCarloEvaluator
+from leader_dt.evaluation.policy_factory import build_policy_dictionary, model_path_metadata
 from leader_dt.evaluation.reporting import ReportWriter
 from leader_dt.plotting.comparison_plots import plot_monte_carlo_comparison_bar, plot_policy_consistency_distribution
 from leader_dt.simulator.environment import LeaderSynchronizationEnv
-
-
-def build_policy_dictionary(
-    model_path: str | None = None,
-    greedy_lambda_cpu: float = constants.DEFAULT_GREEDY_CPU_LAMBDA,
-    greedy_requested_accuracy_fraction: float = constants.DEFAULT_GREEDY_REQUESTED_ACCURACY_FRACTION,
-):
-    """Create the policies used for Monte Carlo evaluation."""
-    policy_dictionary = {
-        "Greedy": GreedyWeightedAoiPolicy(
-            lambda_cpu=greedy_lambda_cpu,
-            requested_accuracy_fraction=greedy_requested_accuracy_fraction,
-        ),
-        "No refresh": NoRefreshPolicy(),
-        "Random": RandomPolicy(),
-    }
-    if model_path is not None:
-        from stable_baselines3 import TD3
-        from leader_dt.rl.wrappers import Td3PolicyWrapper
-        model = TD3.load(model_path)
-        policy_dictionary["TD3"] = Td3PolicyWrapper(model)
-    return policy_dictionary
-
 
 def main() -> None:
     """Run Monte Carlo evaluation and save metrics, plots, and a report."""
     parser = argparse.ArgumentParser()
     parser.add_argument("--trials", type=int, default=30)
     parser.add_argument("--seed-start", type=int, default=1)
-    parser.add_argument("--model-path", type=str, default=None)
+    parser.add_argument(
+        "--model-path",
+        type=str,
+        default=None,
+        help="Backward-compatible alias for --td3-model-path.",
+    )
+    parser.add_argument(
+        "--td3-model-path",
+        type=str,
+        default=None,
+        help="Optional Stable-Baselines3 TD3 checkpoint path.",
+    )
+    parser.add_argument(
+        "--ppo-model-path",
+        type=str,
+        default=None,
+        help="Optional Stable-Baselines3 PPO checkpoint path.",
+    )
     parser.add_argument("--output-dir", type=str, default="results/metrics")
     parser.add_argument(
         "--greedy-lambda-cpu",
@@ -77,7 +71,10 @@ def main() -> None:
     evaluator = MonteCarloEvaluator(trial_count=monte_carlo_config.trial_count, seed_start=monte_carlo_config.seed_start)
     results = evaluator.evaluate_policy_dictionary(
         build_policy_dictionary(
-            model_path=args.model_path,
+            legacy_model_path=args.model_path,
+            td3_model_path=args.td3_model_path,
+            ppo_model_path=args.ppo_model_path,
+            # include_random_policy=True,
             greedy_lambda_cpu=args.greedy_lambda_cpu,
             greedy_requested_accuracy_fraction=args.greedy_requested_accuracy_fraction,
         ),
@@ -94,15 +91,21 @@ def main() -> None:
     report_writer.save_metrics_json(results, metrics_json_path)
     report_writer.save_metrics_csv(report_writer.monte_carlo_results_to_rows(results), metrics_csv_path)
 
+    plot_output_dir = output_dir / "plots"
     plot_paths = [
-        str(plot_monte_carlo_comparison_bar(results, output_path="results/plots/monte_carlo_comparison.png")),
-        str(plot_policy_consistency_distribution(results, output_path="results/plots/policy_consistency_distribution.png")),
+        str(plot_monte_carlo_comparison_bar(results, output_path=plot_output_dir / "monte_carlo_comparison.png")),
+        str(plot_policy_consistency_distribution(results, output_path=plot_output_dir / "policy_consistency_distribution.png")),
     ]
     report = report_writer.build_report(
         config_used=simulation_config,
         seed_used=args.seed_start,
-        model_path=args.model_path,
+        model_path=args.td3_model_path or args.model_path or args.ppo_model_path,
         training_hyperparameters={
+            **model_path_metadata(
+                legacy_model_path=args.model_path,
+                td3_model_path=args.td3_model_path,
+                ppo_model_path=args.ppo_model_path,
+            ),
             "greedy_lambda_cpu": args.greedy_lambda_cpu,
             "greedy_requested_accuracy_fraction": args.greedy_requested_accuracy_fraction,
         },
@@ -111,8 +114,14 @@ def main() -> None:
         plot_paths=plot_paths,
     )
     report_writer.save_report(report, output_dir / "monte_carlo_report.json")
+    print("TD3 model path:", args.td3_model_path or args.model_path)
+    print("PPO model path:", args.ppo_model_path)
     print("Greedy lambda_cpu:", args.greedy_lambda_cpu)
     print("Greedy requested accuracy fraction:", args.greedy_requested_accuracy_fraction)
+    print("Saved", metrics_json_path)
+    print("Saved", metrics_csv_path)
+    for plot_path in plot_paths:
+        print("Saved", plot_path)
     for policy_name, result in results.items():
         print(policy_name, result.metric_mean_dictionary)
 
