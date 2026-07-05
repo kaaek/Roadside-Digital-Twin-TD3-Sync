@@ -74,7 +74,7 @@ class LeaderSynchronizationEnv(gym.Env):
             feasible_pair_indices=feasible_pair_indices,
             available_data_size_bits_array=self.scenario.available_data_size_bits_matrix[slot_index],
             uplink_capacity_bits_array=self.dynamics.compute_uplink_capacity_bits_array(self.state),
-            deterministic=False,
+            deterministic=True,
             random_generator=self.random_generator,
         )
         next_state, transition_info = self.dynamics.step(self.state, scheduling_action)
