@@ -1,0 +1,1 @@
+tail -f logs/final_results.log
