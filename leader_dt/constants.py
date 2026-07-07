@@ -160,7 +160,7 @@ DEFAULT_TOTAL_TIMESTEPS: int = 500_000
 # score-space penalty coefficient in weighted-AoI units per normalized CPU
 # backlog slot. The requested accuracy fraction controls how much of a
 # pair's available payload the Greedy policy asks to upload.
-DEFAULT_GREEDY_CPU_LAMBDA: float = 1.0
+DEFAULT_GREEDY_CPU_LAMBDA: float = 3.0
 DEFAULT_GREEDY_REQUESTED_ACCURACY_FRACTION: float = 1.0
 
 # TD3 convergence-training defaults.  These are intentionally centralized so
@@ -174,8 +174,8 @@ DEFAULT_TD3_CONVERGENCE_MINIMUM_REWARD_IMPROVEMENT: float = 1.0e-6
 DEFAULT_TD3_CONVERGENCE_EVALUATION_SEED_START: int = 10_000
 DEFAULT_TD3_CONVERGENCE_SB3_LOG_INTERVAL: int = 10
 DEFAULT_TD3_CONVERGENCE_OUTPUT_DIRECTORY: str = "results/convergence_td3"
-DEFAULT_TD3_CONVERGENCE_BEST_MODEL_NAME: str = "best_td3_exact_pair_zone_b"
-DEFAULT_TD3_CONVERGENCE_LATEST_MODEL_NAME: str = "latest_td3_exact_pair_zone_b"
+DEFAULT_TD3_CONVERGENCE_BEST_MODEL_NAME: str = "best_td3"
+DEFAULT_TD3_CONVERGENCE_LATEST_MODEL_NAME: str = "latest_td3"
 DEFAULT_LEARNING_RATE: float = 5.0e-4
 DEFAULT_LEARNING_STARTS: int = 10_000
 DEFAULT_BUFFER_SIZE: int = 1_000_000
@@ -233,6 +233,6 @@ DEFAULT_PPO_CONVERGENCE_MINIMUM_REWARD_IMPROVEMENT: float = 50.0
 DEFAULT_PPO_CONVERGENCE_EVALUATION_SEED_START: int = 10_000
 DEFAULT_PPO_CONVERGENCE_SB3_LOG_INTERVAL: int = 10
 DEFAULT_PPO_CONVERGENCE_OUTPUT_DIRECTORY: str = "results/convergence_ppo"
-DEFAULT_PPO_CONVERGENCE_BEST_MODEL_NAME: str = "best_ppo_exact_pair_zone_b"
-DEFAULT_PPO_CONVERGENCE_LATEST_MODEL_NAME: str = "latest_ppo_exact_pair_zone_b"
+DEFAULT_PPO_CONVERGENCE_BEST_MODEL_NAME: str = "best_ppo"
+DEFAULT_PPO_CONVERGENCE_LATEST_MODEL_NAME: str = "latest_ppo"
 
