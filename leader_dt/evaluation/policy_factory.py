@@ -5,9 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from leader_dt import constants
-from leader_dt.baselines.greedy import GreedyWeightedAoiPolicy
-# from leader_dt.baselines.no_refresh import NoRefreshPolicy
-# from leader_dt.baselines.random_policy import RandomPolicy
+from leader_dt.baselines.greedy import GreedyWeightedAoiPolicy, ProximityGreedyPolicy
 
 
 def resolve_td3_model_path(
@@ -32,8 +30,6 @@ def build_policy_dictionary(
     legacy_model_path: str | None = None,
     td3_model_path: str | None = None,
     ppo_model_path: str | None = None,
-    # include_random_policy: bool = False,
-    # include_no_refresh_policy: bool = True,
     greedy_lambda_cpu: float = constants.DEFAULT_GREEDY_CPU_LAMBDA,
     greedy_requested_accuracy_fraction: float = constants.DEFAULT_GREEDY_REQUESTED_ACCURACY_FRACTION,
 ) -> dict[str, Any]:
@@ -44,18 +40,14 @@ def build_policy_dictionary(
             ``--model-path`` CLI argument.
         td3_model_path: Optional Stable-Baselines3 TD3 checkpoint path.
         ppo_model_path: Optional Stable-Baselines3 PPO checkpoint path.
-        include_random_policy: Whether to include the Random baseline. Monte
-            Carlo uses it; sensitivity sweeps usually omit it to keep plots
-            readable.
-        include_no_refresh_policy: Whether to include the no-refresh baseline.
         greedy_lambda_cpu: CPU penalty coefficient for the Greedy baseline.
         greedy_requested_accuracy_fraction: Accuracy fraction requested by the
             Greedy baseline.
 
     Returns:
         A policy dictionary keyed by human-readable policy names. Plotting code
-        iterates over these keys dynamically, so adding PPO here automatically
-        adds PPO to Monte Carlo and sensitivity plots.
+        iterates over these keys dynamically, so adding Proximity Greedy or PPO
+        here automatically adds those policies to Monte Carlo and sensitivity plots.
     """
     resolved_td3_model_path = resolve_td3_model_path(
         legacy_model_path=legacy_model_path,
@@ -67,11 +59,11 @@ def build_policy_dictionary(
             lambda_cpu=greedy_lambda_cpu,
             requested_accuracy_fraction=greedy_requested_accuracy_fraction,
         ),
+        "Proximity Greedy": ProximityGreedyPolicy(
+            lambda_cpu=greedy_lambda_cpu,
+            requested_accuracy_fraction=greedy_requested_accuracy_fraction,
+        ),
     }
-    # if include_no_refresh_policy:
-    #     policy_dictionary["No refresh"] = NoRefreshPolicy()
-    # if include_random_policy:
-    #     policy_dictionary["Random"] = RandomPolicy()
 
     if resolved_td3_model_path is not None:
         from stable_baselines3 import TD3
