@@ -46,6 +46,16 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument(
+        "--sensor-type-count",
+        type=int,
+        default=None,
+        help=(
+            "Optional number of active sensor types for this training run. "
+            "Used by sensor-type scalability experiments; if omitted, the "
+            "default SimulationConfig value is used."
+        ),
+    )
+    parser.add_argument(
         "--eval-frequency-steps",
         type=int,
         default=convergence_defaults.eval_frequency_steps,
@@ -239,6 +249,7 @@ def print_startup_summary(
     print("TD3 convergence training", flush=True)
     print("=" * 80, flush=True)
     print(f"seed: {simulation_config.random_seed}", flush=True)
+    print(f"sensor_type_count: {simulation_config.system.sensor_type_count}", flush=True)
     print(f"output_dir: {output_dir}", flush=True)
     print(f"eval_frequency_steps: {convergence_config.eval_frequency_steps}", flush=True)
     print(f"evaluation_episodes: {convergence_config.evaluation_episode_count}", flush=True)
@@ -262,6 +273,14 @@ def print_startup_summary(
 def main() -> None:
     args = parse_arguments()
     simulation_config = SimulationConfig(random_seed=args.seed)
+    if args.sensor_type_count is not None:
+        simulation_config = replace(
+            simulation_config,
+            system=replace(
+                simulation_config.system,
+                sensor_type_count=int(args.sensor_type_count),
+            ),
+        )
     training_config = build_training_config(args)
     convergence_config = build_convergence_config(args)
     validate_convergence_config(convergence_config)
