@@ -119,7 +119,16 @@ class ScenarioGenerator:
         ]
 
     def _generate_sensor_types(self) -> list[SensorType]:
-        sensor_definitions = constants.DEFAULT_SENSOR_DEFINITIONS[: self.simulation_config.system.sensor_type_count]
+        requested_sensor_type_count = int(self.simulation_config.system.sensor_type_count)
+        available_sensor_type_count = len(constants.DEFAULT_SENSOR_DEFINITIONS)
+        if requested_sensor_type_count <= 0:
+            raise ValueError("sensor_type_count must be positive.")
+        if requested_sensor_type_count > available_sensor_type_count:
+            raise ValueError(
+                "sensor_type_count cannot exceed the number of configured sensor "
+                f"definitions ({available_sensor_type_count})."
+            )
+        sensor_definitions = constants.DEFAULT_SENSOR_DEFINITIONS[:requested_sensor_type_count]
         return [
             SensorType(
                 sensor_type_id=SensorTypeId(index),

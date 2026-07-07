@@ -97,6 +97,62 @@ DEFAULT_SENSOR_DEFINITIONS: tuple[dict, ...] = (
         "sensing_delay_slots": 0.1,
         "nominal_data_size_bits": 40_000.0,
     },
+    {
+        "name": "LiDAR Point Cloud",
+        "priority_weight": 2.8,
+        "cpu_cycles_per_bit": 18.0,
+        "sensing_delay_slots": 1.2,
+        "nominal_data_size_bits": 360_000.0,
+    },
+    {
+        "name": "Brake System Status",
+        "priority_weight": 2.6,
+        "cpu_cycles_per_bit": 3.0,
+        "sensing_delay_slots": 0.2,
+        "nominal_data_size_bits": 70_000.0,
+    },
+    {
+        "name": "Road Friction Estimate",
+        "priority_weight": 2.5,
+        "cpu_cycles_per_bit": 9.0,
+        "sensing_delay_slots": 0.6,
+        "nominal_data_size_bits": 180_000.0,
+    },
+    {
+        "name": "Lane Marking Detector",
+        "priority_weight": 2.4,
+        "cpu_cycles_per_bit": 14.0,
+        "sensing_delay_slots": 0.9,
+        "nominal_data_size_bits": 260_000.0,
+    },
+    {
+        "name": "V2X Beacon Monitor",
+        "priority_weight": 2.1,
+        "cpu_cycles_per_bit": 4.0,
+        "sensing_delay_slots": 0.3,
+        "nominal_data_size_bits": 90_000.0,
+    },
+    {
+        "name": "Steering Angle Sensor",
+        "priority_weight": 1.9,
+        "cpu_cycles_per_bit": 2.5,
+        "sensing_delay_slots": 0.2,
+        "nominal_data_size_bits": 55_000.0,
+    },
+    {
+        "name": "GNSS Position Fix",
+        "priority_weight": 1.7,
+        "cpu_cycles_per_bit": 2.0,
+        "sensing_delay_slots": 0.1,
+        "nominal_data_size_bits": 45_000.0,
+    },
+    {
+        "name": "Acoustic Hazard Sensor",
+        "priority_weight": 1.6,
+        "cpu_cycles_per_bit": 7.0,
+        "sensing_delay_slots": 0.5,
+        "nominal_data_size_bits": 160_000.0,
+    },
 )
 DEFAULT_TOTAL_TIMESTEPS: int = 500_000
 
