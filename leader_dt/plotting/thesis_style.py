@@ -35,17 +35,24 @@ def thesis_figure_size(
 
 
 def apply_thesis_plot_style() -> None:
-    """Apply SciencePlots style with a robust no-LaTeX fallback.
+    """Apply the mandatory project thesis plotting style.
+
+    Sensitivity sweeps always call this function before plotting.  SciencePlots
+    is intentionally required instead of treated as an optional preference, so
+    missing installations fail clearly and can be fixed by installing the
+    project requirements.
 
     Set LEADER_DT_USE_LATEX_PLOTS=1 only if a LaTeX distribution is installed.
     """
     try:
         import scienceplots  # noqa: F401
+    except ImportError as error:
+        raise ImportError(
+            "SciencePlots is required for project sensitivity plots. "
+            "Install it with `pip install SciencePlots` or install the project requirements."
+        ) from error
 
-        plt.style.use(["science", "grid"])
-    except Exception:
-        plt.style.use("default")
-
+    plt.style.use(["science", "grid"])
     use_latex = os.environ.get("LEADER_DT_USE_LATEX_PLOTS", "0") == "1"
 
     plt.rcParams.update(

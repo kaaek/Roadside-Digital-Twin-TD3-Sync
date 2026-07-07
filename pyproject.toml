@@ -15,6 +15,7 @@ dependencies = [
   "matplotlib>=3.7",
   "tensorboard>=2.14",
   "z3-solver>=4.12",
+  "SciencePlots>=2.1",
 ]
 
 [tool.setuptools.packages.find]

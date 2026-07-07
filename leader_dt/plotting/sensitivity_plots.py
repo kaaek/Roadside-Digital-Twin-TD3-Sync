@@ -12,10 +12,9 @@ from leader_dt.plotting.thesis_style import apply_thesis_plot_style, thesis_figu
 
 POLICY_STYLE_DICTIONARY = {
     "Greedy": {"marker": "o", "linestyle": "-", "color": "#0072B2"},
+    "Proximity Greedy": {"marker": "D", "linestyle": ":", "color": "#D55E00"},
     "TD3": {"marker": "s", "linestyle": "--", "color": "#009E73"},
     "PPO": {"marker": "^", "linestyle": "-.", "color": "#CC79A7"},
-    "No refresh": {"marker": "D", "linestyle": ":", "color": "#D55E00"},
-    "Random": {"marker": "v", "linestyle": "-", "color": "#E69F00"},
 }
 
 
@@ -37,6 +36,7 @@ PARAMETER_LABEL_DICTIONARY = {
     "sensors_per_vehicle": "Number of sensors per vehicle",
     "accuracy_threshold": "Accuracy threshold",
     "data_size_high_multiplier": "Task-size upper multiplier",
+    "sensor_type_count": "Number of sensor types",
     "vehicle_count": "Number of vehicles",
     "uplink_bandwidth_hz": "Uplink bandwidth (Hz)",
     "freshness_threshold_slots": "Freshness threshold (slots)",
@@ -92,14 +92,6 @@ def plot_sensitivity_curves(
             ],
             dtype=float,
         )
-        y_errors = np.asarray(
-            [
-                point.policy_results[policy_name].metric_std_dictionary[metric_name]
-                for point in sensitivity_result_list
-            ],
-            dtype=float,
-        )
-
         style = POLICY_STYLE_DICTIONARY.get(
             policy_name,
             {
@@ -108,19 +100,15 @@ def plot_sensitivity_curves(
             },
         )
 
-        ax.errorbar(
+        ax.plot(
             x_values,
             y_values,
-            yerr=y_errors,
             label=policy_name,
             marker=style.get("marker", "o"),
             linestyle=style.get("linestyle", "-"),
             color=style.get("color", None),
             linewidth=1.8,
             markersize=5.5,
-            capsize=3,
-            elinewidth=0.9,
-            capthick=0.9,
             alpha=0.95,
         )
 
