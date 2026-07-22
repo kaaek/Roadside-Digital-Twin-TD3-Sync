@@ -14,7 +14,7 @@ class SystemConfig:
     freshness_threshold_slots: int = constants.DEFAULT_FRESHNESS_THRESHOLD_SLOTS
     accuracy_threshold: float = constants.DEFAULT_ACCURACY_THRESHOLD
     leader_cpu_frequency_cycles_per_second: float = constants.DEFAULT_LEADER_CPU_FREQUENCY_CYCLES_PER_SECOND
-    include_leader_as_provider: bool = True
+    include_leader_as_provider: bool = False
     max_vehicle_count_for_action_space: int = constants.DEFAULT_MAX_VEHICLE_COUNT_FOR_ACTION_SPACE
     max_sensors_per_vehicle_for_action_space: int = constants.DEFAULT_MAX_SENSORS_PER_VEHICLE_FOR_ACTION_SPACE
 
