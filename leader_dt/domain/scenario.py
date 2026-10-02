@@ -15,6 +15,8 @@ class Scenario:
     """
     All exogenous data for one episode. Vehicle positions move physically each slot.
     Available data sizes δ_i(t) are sampled per vehicle-sensor pair and per slot.
+    δ_i(t) is the size of the sample that arrives at slot t; whether a sample
+    arrives is given by the arrival-count matrix.
     """
 
     vehicles: list[Vehicle]
@@ -24,6 +26,7 @@ class Scenario:
     vehicle_speed_meter_per_second_array: np.ndarray
     sensor_ownership_matrix: np.ndarray
     available_data_size_bits_matrix: np.ndarray  # shape: time_horizon × pair_count
+    sample_arrival_count_matrix: np.ndarray  # shape: time_horizon × pair_count
 
     @property
     def pair_count(self) -> int:
@@ -82,6 +85,11 @@ class ScenarioGenerator:
             sensor_types=sensor_types,
             time_horizon_slots=self.simulation_config.system.time_horizon_slots,
         )
+        # Sampled after the data sizes so legacy scenarios keep the same random stream.
+        arrival_counts = self._generate_sample_arrival_counts(
+            pair_count=sensor_pair_index.pair_count(),
+            time_horizon_slots=self.simulation_config.system.time_horizon_slots,
+        )
         return Scenario(
             vehicles=vehicles,
             sensor_types=sensor_types,
@@ -90,6 +98,7 @@ class ScenarioGenerator:
             vehicle_speed_meter_per_second_array=np.array([v.speed_meter_per_second for v in vehicles], dtype=np.float64),
             sensor_ownership_matrix=ownership_matrix,
             available_data_size_bits_matrix=data_sizes,
+            sample_arrival_count_matrix=arrival_counts,
         )
 
     def _generate_vehicles(self) -> list[Vehicle]:
@@ -202,3 +211,12 @@ class ScenarioGenerator:
                 size=time_horizon_slots,
             )
         return data_size_matrix
+
+    def _generate_sample_arrival_counts(self, pair_count: int, time_horizon_slots: int) -> np.ndarray:
+        """Poisson(lambda) sample arrivals per pair and slot; every slot gets one in legacy mode."""
+        arrival_rate = self.simulation_config.data_generation.sample_arrival_rate_per_slot
+        if arrival_rate is None:
+            return np.ones((time_horizon_slots, pair_count), dtype=np.int64)
+        if arrival_rate < 0.0:
+            raise ValueError("sample_arrival_rate_per_slot must be non-negative.")
+        return self.random_generator.poisson(float(arrival_rate), size=(time_horizon_slots, pair_count)).astype(np.int64)

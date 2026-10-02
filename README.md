@@ -2,7 +2,7 @@
 
 ## Description
 
-`TD3-RSU` is a Python research codebase for simulating a failed-RSU vehicular network where a leader vehicle collects sensor data from nearby vehicles to keep a Digital Twin fresh. The project compares a TD3 reinforcement learning policy against heuristic baselines using Monte Carlo evaluation, sensitivity sweeps, CPU-aware Greedy scheduling, and convergence diagnostics.
+`TD3-RSU` is a Python research codebase for simulating a failed-RSU vehicular network where a leader vehicle collects sensor data from nearby vehicles to keep a Digital Twin fresh. The project compares TD3 and PPO reinforcement learning policies against heuristic baselines (CPU-aware Greedy, Proximity Greedy, Max-AoI Greedy) using Monte Carlo evaluation, sensitivity sweeps, and convergence diagnostics. Sensors generate data sporadically: each vehicle-sensor pair receives Poisson-distributed samples (nominal rate 0.10 per slot) and keeps only its latest unsent one.
 
 ## Installation
 
@@ -26,9 +26,13 @@
     
     `pip install -r requirements.txt`
     
-6. Verify that the project compiles:
+6. Verify that the project compiles and the tests pass:
     
     `python -m compileall -q leader_dt scripts tests`
+    
+    `python -m pytest -q tests`
+
+The commands below assume the virtual environment is active. `generate_final_results.sh` calls `.venv/bin/python` directly, so it does not need activation.
     
 
 ## Usage
@@ -226,6 +230,27 @@ Monte Carlo outputs are usually saved under:
 Sensitivity outputs are usually saved under:
 
 `results/sensitivity/` or the `--output-dir` passed to `scripts/run_sensitivity.py`.
+
+### 23. Change the sensor sample arrival rate
+
+The default rate is `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` in `leader_dt/constants.py` (`0.10`; `None` restores the legacy model where every pair has fresh data every slot). Override it for a single training run:
+
+```bash
+python scripts/train_td3_until_convergence.py --seed 1 --sample-arrival-rate 0.05 --output-dir results/td3_lambda005_seed1
+```
+
+Sweep it with trained models (they must be trained with the arrival process enabled):
+
+```bash
+python scripts/run_sensitivity.py --parameter sample_arrival_rate --values 0.02,0.05,0.1,0.2,0.5,1.0 --trials 500 --seed-start 50000 --td3-model-path results/convergence_td3/models/best_td3.zip --ppo-model-path results/convergence_ppo/models/best_ppo.zip --output-dir results/sweeps/sensitivity_sample_arrival_rate
+```
+
+### 24. Generate the final results in the background
+
+```bash
+bash generate_final_results.sh   # prints the background job PID
+bash check_progress.sh           # follows logs/final_results.log
+```
 
 ## License
 

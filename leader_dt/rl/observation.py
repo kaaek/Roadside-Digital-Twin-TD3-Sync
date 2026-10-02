@@ -15,7 +15,8 @@ class ObservationBuilder:
     Observation layout:
     - pair_count values: AoI_i(t) / tau_max
     - pair_count values: feasible-pair mask in Zone B
-    - pair_count values: available data size normalized by max nominal payload
+    - pair_count values: pending sample size normalized by max nominal payload
+    - pair_count values: pending sample age / tau_max (only with a sample arrival process)
     - scalar CPU backlog ratio
     - scalar time progress t / T
     - scalar previous CPU load ratio
@@ -25,8 +26,12 @@ class ObservationBuilder:
     def __init__(self, simulation_config: SimulationConfig) -> None:
         self.simulation_config = simulation_config
 
+    def _pair_block_count(self) -> int:
+        # The sample-age block is only added with an arrival process so legacy checkpoints keep their shape.
+        return 4 if self.simulation_config.data_generation.has_sample_arrival_process else 3
+
     def get_observation_dimension(self, scenario: Scenario) -> int:
-        return 3 * self.simulation_config.system.max_pair_count_for_action_space + 4
+        return self._pair_block_count() * self.simulation_config.system.max_pair_count_for_action_space + 4
 
     def build_observation_space(self, scenario: Scenario) -> spaces.Box:
         return spaces.Box(low=0.0, high=1.0, shape=(self.get_observation_dimension(scenario),), dtype=np.float32)
@@ -60,8 +65,7 @@ class ObservationBuilder:
         feasible_pair_index_array = feasible_pair_index_array[feasible_pair_index_array < pair_count]
         if feasible_pair_index_array.size > 0:
             feasible_mask[feasible_pair_index_array] = 1.0
-        slot_index = min(state.time_slot_index, system.time_horizon_slots - 1)
-        data_sizes = scenario.available_data_size_bits_matrix[slot_index]
+        data_sizes = np.asarray(state.pending_sample_size_bits_array, dtype=np.float64)
         data_sizes = np.where(active_mask, data_sizes, 0.0)
         max_nominal_data_size = max(sensor.nominal_data_size_bits for sensor in scenario.sensor_types)
         data_size_normalized = np.clip(data_sizes / max(max_nominal_data_size, constants.EPSILON_FLOAT), 0.0, 1.0)
@@ -86,9 +90,18 @@ class ObservationBuilder:
             urgency_fraction = float(np.mean(sensor_type_aoi_array[active_sensor_type_mask] >= 0.7 * system.freshness_threshold_slots))
         else:
             urgency_fraction = 0.0
-        return np.concatenate([
+        pair_blocks = [
             self._pad_to_max_pair_count(aoi_normalized),
             self._pad_to_max_pair_count(feasible_mask),
             self._pad_to_max_pair_count(data_size_normalized),
+        ]
+        if self._pair_block_count() == 4:
+            generation_slot_array = np.asarray(state.pending_sample_generation_slot_array, dtype=np.float64)
+            has_sample_mask = active_mask & ~np.isnan(generation_slot_array)
+            sample_age_array = np.where(has_sample_mask, state.time_slot_index - generation_slot_array, 0.0)
+            sample_age_normalized = np.clip(sample_age_array / max(system.freshness_threshold_slots, constants.EPSILON_FLOAT), 0.0, 1.0)
+            pair_blocks.append(self._pad_to_max_pair_count(sample_age_normalized))
+        return np.concatenate([
+            *pair_blocks,
             np.array([cpu_normalized, time_progress, previous_cpu_normalized, urgency_fraction], dtype=np.float64),
         ]).astype(np.float32)

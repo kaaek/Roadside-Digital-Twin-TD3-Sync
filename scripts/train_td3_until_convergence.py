@@ -56,6 +56,15 @@ def parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--sample-arrival-rate",
+        type=float,
+        default=None,
+        help=(
+            "Optional Poisson sample arrival rate per vehicle-sensor pair and "
+            "slot; if omitted, the default SimulationConfig value is used."
+        ),
+    )
+    parser.add_argument(
         "--eval-frequency-steps",
         type=int,
         default=convergence_defaults.eval_frequency_steps,
@@ -250,6 +259,7 @@ def print_startup_summary(
     print("=" * 80, flush=True)
     print(f"seed: {simulation_config.random_seed}", flush=True)
     print(f"sensor_type_count: {simulation_config.system.sensor_type_count}", flush=True)
+    print(f"sample_arrival_rate_per_slot: {simulation_config.data_generation.sample_arrival_rate_per_slot}", flush=True)
     print(f"output_dir: {output_dir}", flush=True)
     print(f"eval_frequency_steps: {convergence_config.eval_frequency_steps}", flush=True)
     print(f"evaluation_episodes: {convergence_config.evaluation_episode_count}", flush=True)
@@ -279,6 +289,14 @@ def main() -> None:
             system=replace(
                 simulation_config.system,
                 sensor_type_count=int(args.sensor_type_count),
+            ),
+        )
+    if args.sample_arrival_rate is not None:
+        simulation_config = replace(
+            simulation_config,
+            data_generation=replace(
+                simulation_config.data_generation,
+                sample_arrival_rate_per_slot=float(args.sample_arrival_rate),
             ),
         )
     training_config = build_training_config(args)

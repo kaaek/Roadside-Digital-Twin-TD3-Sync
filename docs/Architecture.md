@@ -18,7 +18,7 @@ The core state lives in the environment and simulator state objects. It changes 
 
 ### Scenario generation
 
-`leader_dt/domain/scenario.py` and related domain modules generate vehicles, sensor ownership, feasible provider-sensor pairs, available data sizes, and mobility-related conditions. This is where stochastic scenario information is created from controlled random seeds.
+`leader_dt/domain/scenario.py` and related domain modules generate vehicles, sensor ownership, provider-sensor pairs, per-slot sample sizes, Poisson sample-arrival counts, and mobility-related conditions. This is where stochastic scenario information is created from controlled random seeds. Arrival counts are drawn after sample sizes, so a given seed produces the same sizes for every arrival rate. With the arrival rate set to `None`, every pair receives a sample in every slot (the legacy model).
 
 ### Simulator environment
 
@@ -30,11 +30,11 @@ The core state lives in the environment and simulator state objects. It changes 
 
 ### Dynamics and state transition
 
-`leader_dt/simulator/dynamics.py` updates vehicle feasibility, sensor-type AoI, achieved accuracy, collected bits, CPU backlog, and violations after each scheduled upload. It enforces the difference between sensor-type freshness and pair-level resource constraints.
+`leader_dt/simulator/dynamics.py` updates vehicle feasibility, pending sensor samples, sensor-type AoI, achieved accuracy, collected bits, CPU backlog, and violations after each scheduled upload. It enforces the difference between sensor-type freshness and pair-level resource constraints. Each pair holds at most one pending sample in `SimulationState`: new arrivals overwrite it and an upload consumes it. A pair is feasible only if its carrier is in Zone B and it holds a pending sample. A successful refresh sets the sensor-type AoI to the sample's age plus sensing and transmission delay.
 
 ### Observation and reward
 
-`leader_dt/rl/observation.py` builds the normalized observation vector consumed by TD3/PPO. `leader_dt/rl/reward.py` computes a penalty-heavy reward based on weighted AoI, freshness violations, CPU backlog, accuracy violations, terminal CPU violations, and accuracy bonuses.
+`leader_dt/rl/observation.py` builds the normalized observation vector consumed by TD3/PPO: per-pair AoI, feasibility, pending sample size and (when the arrival process is enabled) pending sample age, plus four global features. `leader_dt/rl/reward.py` computes a smooth shaped reward from normalized weighted AoI, squared freshness and accuracy slack, a log1p CPU-backlog term, a terminal CPU term, and an accuracy bonus. Reported evaluation metrics stay count-based.
 
 ### TD3 and PPO trainers
 
@@ -43,6 +43,8 @@ The core state lives in the environment and simulator state objects. It changes 
 ### Policy wrappers and policy factory
 
 `leader_dt/rl/wrappers.py` adapts Stable-Baselines3 models into the project policy interface. `leader_dt/evaluation/policy_factory.py` loads Greedy, TD3, and PPO policies into one dictionary for evaluation scripts.
+
+The package `leader_dt/evaluation/__init__.py` resolves its exports lazily, so `leader_dt/rl/reward.py` can import `leader_dt.evaluation.penalized_objective` without pulling in the simulator and creating a circular import.
 
 ### Monte Carlo and sensitivity evaluation
 

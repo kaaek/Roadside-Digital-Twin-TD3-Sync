@@ -37,7 +37,7 @@ SEED_START=50000
 
 ## Task Size Sweep
 
-`data_size_high_multiplier` must be greater than or equal to the configured low multiplier. If the default low multiplier is `0.8`, do not sweep below `0.8`.
+`data_size_high_multiplier` must be greater than or equal to the configured low multiplier (currently `0.3`). Do not sweep below it.
 
 ```bash
 python scripts/run_sensitivity.py \
@@ -76,6 +76,21 @@ python scripts/run_sensitivity.py \
   --td3-model-path "$TD3_MODEL" \
   --ppo-model-path "$PPO_MODEL" \
   --output-dir results/sensitivity_final_accuracy_threshold_20_values
+```
+
+## Sample Arrival Rate Sweep
+
+`sample_arrival_rate` is the Poisson rate of new samples per vehicle-sensor pair per slot (nominal `0.10`). TD3/PPO models must have been trained with the arrival process enabled; legacy-mode models have a smaller observation and will not load.
+
+```bash
+python scripts/run_sensitivity.py \
+  --parameter sample_arrival_rate \
+  --values 0.02,0.05,0.10,0.20,0.30,0.50,1.00,2.00 \
+  --trials "$TRIALS" \
+  --seed-start "$SEED_START" \
+  --td3-model-path "$TD3_MODEL" \
+  --ppo-model-path "$PPO_MODEL" \
+  --output-dir results/sensitivity_final_sample_arrival_rate
 ```
 
 ## Rules

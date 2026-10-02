@@ -38,6 +38,11 @@ class LeaderSynchronizationDynamics:
 
     def initialize_state(self) -> SimulationState:
         sensor_type_aoi_slots_array = np.ones(self.scenario.sensor_type_count, dtype=np.float64)
+        pending_sample_size_bits_array, pending_sample_generation_slot_array = self.apply_sample_arrivals(
+            np.zeros(self.scenario.pair_count, dtype=np.float64),
+            np.full(self.scenario.pair_count, np.nan, dtype=np.float64),
+            slot_index=0,
+        )
         return SimulationState(
             time_slot_index=0,
             vehicle_positions_meter_array=self.scenario.initial_vehicle_positions_meter_array.copy(),
@@ -46,7 +51,34 @@ class LeaderSynchronizationDynamics:
             previous_cpu_added_cycles_float=0.0,
             cpu_backlog_by_pair_cycles_array=np.zeros(self.scenario.pair_count, dtype=np.float64),
             sensor_type_aoi_slots_array=sensor_type_aoi_slots_array,
+            pending_sample_size_bits_array=pending_sample_size_bits_array,
+            pending_sample_generation_slot_array=pending_sample_generation_slot_array,
         )
+
+    def apply_sample_arrivals(
+        self,
+        pending_sample_size_bits_array: np.ndarray,
+        pending_sample_generation_slot_array: np.ndarray,
+        slot_index: int,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """Overwrite each pair's pending sample with the one arriving at ``slot_index``, if any."""
+        next_size_array = np.asarray(pending_sample_size_bits_array, dtype=np.float64).copy()
+        next_generation_slot_array = np.asarray(pending_sample_generation_slot_array, dtype=np.float64).copy()
+        if slot_index >= self.simulation_config.system.time_horizon_slots:
+            return next_size_array, next_generation_slot_array
+        arrival_mask = self.scenario.sample_arrival_count_matrix[slot_index] > 0
+        next_size_array[arrival_mask] = self.scenario.available_data_size_bits_matrix[slot_index][arrival_mask]
+        next_generation_slot_array[arrival_mask] = float(slot_index)
+        return next_size_array, next_generation_slot_array
+
+    def get_available_data_size_bits_array(self, state: SimulationState) -> np.ndarray:
+        """Size of each pair's pending sample in bits; 0 if the pair has nothing to upload."""
+        return np.asarray(state.pending_sample_size_bits_array, dtype=np.float64)
+
+    def get_pending_sample_age_slots_array(self, state: SimulationState) -> np.ndarray:
+        """Slots since each pending sample was generated; 0 if the pair has no pending sample."""
+        generation_slot_array = np.asarray(state.pending_sample_generation_slot_array, dtype=np.float64)
+        return np.where(np.isnan(generation_slot_array), 0.0, float(state.time_slot_index) - generation_slot_array)
 
     def advance_vehicle_positions(self, state: SimulationState) -> np.ndarray:
         return state.vehicle_positions_meter_array + self.scenario.vehicle_speed_meter_per_second_array * self.simulation_config.system.slot_duration_seconds
@@ -76,13 +108,15 @@ class LeaderSynchronizationDynamics:
         return np.where(self.get_active_sensor_type_mask(state))[0].astype(int).tolist()
 
     def get_feasible_pair_indices(self, state: SimulationState) -> list[int]:
+        """Pairs whose carrier is in Zone B and that hold a pending sample."""
         in_zone_mask = self.get_in_zone_vehicle_mask(state)
+        available_data_size_bits_array = self.get_available_data_size_bits_array(state)
         feasible_pairs: list[int] = []
         for pair in self.scenario.sensor_pair_index.pairs:
             vehicle_id = int(pair.vehicle_id)
             if (not self.simulation_config.system.include_leader_as_provider) and vehicle_id == 0:
                 continue
-            if in_zone_mask[vehicle_id]:
+            if in_zone_mask[vehicle_id] and available_data_size_bits_array[int(pair.pair_id)] > 0.0:
                 feasible_pairs.append(int(pair.pair_id))
         return feasible_pairs
 
@@ -112,13 +146,16 @@ class LeaderSynchronizationDynamics:
 
     def step(self, state: SimulationState, action: SchedulingAction) -> tuple[SimulationState, dict]:
         slot_index = state.time_slot_index
-        available_data_size_bits_array = self.scenario.available_data_size_bits_matrix[slot_index]
+        available_data_size_bits_array = self.get_available_data_size_bits_array(state)
+        pending_sample_size_bits_array = available_data_size_bits_array.copy()
+        pending_sample_generation_slot_array = np.asarray(state.pending_sample_generation_slot_array, dtype=np.float64).copy()
         pair_index = action.scheduled_pair_index
         scheduled_sensor_type_index: int | None = None
         refresh_success = False
         achieved_accuracy = float("nan")
         transmission_delay_slots = 0.0
         sensing_delay_slots = 0.0
+        sample_age_slots = float("nan")
         added_cycles = 0.0
         if pair_index is not None and action.collected_bits_float > 0.0:
             pair_index = int(pair_index)
@@ -126,6 +163,10 @@ class LeaderSynchronizationDynamics:
             scheduled_sensor_type_index = int(pair.sensor_type_id)
             achieved_accuracy = self.accuracy_model.compute_accuracy(action.collected_bits_float, available_data_size_bits_array[pair_index])
             refresh_success = achieved_accuracy >= self.simulation_config.system.accuracy_threshold
+            sample_age_slots = float(self.get_pending_sample_age_slots_array(state)[pair_index])
+            # The upload consumes the pending sample, whether or not it meets the accuracy threshold.
+            pending_sample_size_bits_array[pair_index] = 0.0
+            pending_sample_generation_slot_array[pair_index] = np.nan
             sensing_delay_slots = self.scenario.sensing_delay_slots_array_by_pair()[pair_index]
             transmission_delay_slots = self.aoi_transition_model.compute_transmission_delay_slots(
                 action.collected_bits_float,
@@ -145,6 +186,7 @@ class LeaderSynchronizationDynamics:
             sensing_delay_slots_float=sensing_delay_slots,
             transmission_delay_slots_float=transmission_delay_slots,
             refresh_success_boolean=refresh_success,
+            sample_age_slots_float=0.0 if np.isnan(sample_age_slots) else sample_age_slots,
         )
         next_pair_aoi = self.scenario.project_sensor_type_values_to_pairs(next_sensor_type_aoi)
         current_cpu_by_pair = np.asarray(state.cpu_backlog_by_pair_cycles_array, dtype=np.float64)
@@ -155,6 +197,11 @@ class LeaderSynchronizationDynamics:
             next_cpu_by_pair[int(pair_index)] += added_cycles
         next_cpu_by_pair = self.drain_cpu_backlog_by_pair(next_cpu_by_pair, self.simulation_config.system.slot_duration_seconds)
         next_vehicle_positions = self.advance_vehicle_positions(state)
+        pending_sample_size_bits_array, pending_sample_generation_slot_array = self.apply_sample_arrivals(
+            pending_sample_size_bits_array,
+            pending_sample_generation_slot_array,
+            slot_index=state.time_slot_index + 1,
+        )
         preliminary_next_state = SimulationState(
             time_slot_index=state.time_slot_index + 1,
             vehicle_positions_meter_array=next_vehicle_positions,
@@ -163,6 +210,8 @@ class LeaderSynchronizationDynamics:
             previous_cpu_added_cycles_float=added_cycles,
             cpu_backlog_by_pair_cycles_array=next_cpu_by_pair,
             sensor_type_aoi_slots_array=next_sensor_type_aoi,
+            pending_sample_size_bits_array=pending_sample_size_bits_array,
+            pending_sample_generation_slot_array=pending_sample_generation_slot_array,
         )
         active_pair_mask = self.get_active_pair_mask(preliminary_next_state)
         active_sensor_type_mask = self.get_active_sensor_type_mask(preliminary_next_state)
@@ -176,10 +225,13 @@ class LeaderSynchronizationDynamics:
             previous_cpu_added_cycles_float=added_cycles,
             cpu_backlog_by_pair_cycles_array=next_cpu_by_pair,
             sensor_type_aoi_slots_array=preliminary_next_state.sensor_type_aoi_slots_array,
+            pending_sample_size_bits_array=pending_sample_size_bits_array,
+            pending_sample_generation_slot_array=pending_sample_generation_slot_array,
         )
         info = {
             "achieved_accuracy_float": achieved_accuracy,
             "refresh_success_boolean": refresh_success,
+            "sample_age_slots_float": sample_age_slots,
             "added_cycles_float": added_cycles,
             "weighted_aoi_float": self.objective.weighted_aoi_at_slot(next_sensor_type_aoi, active_sensor_type_mask),
             "freshness_violation_count_integer": self.aoi_transition_model.count_freshness_violations(next_sensor_type_aoi, active_sensor_type_mask),

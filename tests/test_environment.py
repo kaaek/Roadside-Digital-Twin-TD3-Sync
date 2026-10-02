@@ -133,3 +133,69 @@ def test_weighted_aoi_uses_sensor_type_level_state():
         active_sensor_type_mask,
     )
     assert np.isclose(info["weighted_aoi_float"], expected_weighted_aoi)
+
+
+def _config_with_arrival_rate(arrival_rate: float | None) -> SimulationConfig:
+    config = SimulationConfig(random_seed=1)
+    return replace(config, data_generation=replace(config.data_generation, sample_arrival_rate_per_slot=arrival_rate))
+
+
+def test_zero_arrival_rate_leaves_no_feasible_pairs():
+    env = LeaderSynchronizationEnv(_config_with_arrival_rate(0.0))
+    env.reset(seed=1)
+    for _ in range(5):
+        assert env.dynamics.get_feasible_pair_indices(env.state) == []
+        env.step(env.action_space.sample())
+
+
+def test_feasible_pairs_require_pending_sample():
+    env = LeaderSynchronizationEnv(_config_with_arrival_rate(0.3))
+    env.reset(seed=1)
+    for _ in range(10):
+        pending_sizes = env.dynamics.get_available_data_size_bits_array(env.state)
+        for pair_index in env.dynamics.get_feasible_pair_indices(env.state):
+            assert pending_sizes[pair_index] > 0.0
+        env.step(env.action_space.sample())
+
+
+def test_upload_consumes_pending_sample_and_ages_aoi():
+    env = LeaderSynchronizationEnv(_config_with_arrival_rate(0.3))
+    env.reset(seed=1)
+    # Wait until some feasible pair holds a sample that is at least one slot old.
+    for _ in range(env.simulation_config.system.time_horizon_slots - 1):
+        ages = env.dynamics.get_pending_sample_age_slots_array(env.state)
+        aged_pairs = [index for index in env.dynamics.get_feasible_pair_indices(env.state) if ages[index] >= 1.0]
+        if aged_pairs:
+            break
+        env.step(np.zeros(env.action_space.shape, dtype=np.float32))
+    assert aged_pairs
+    pair_index = aged_pairs[0]
+    sample_age = float(ages[pair_index])
+    action = np.zeros(env.action_space.shape, dtype=np.float32)
+    action[pair_index] = 1.0
+    action[-1] = 1.0
+    arrives_next_slot = env.scenario.sample_arrival_count_matrix[env.state.time_slot_index + 1, pair_index] > 0
+    _, _, _, _, info = env.step(action)
+    assert info["sample_age_slots_float"] == sample_age
+    if not arrives_next_slot:
+        assert env.dynamics.get_available_data_size_bits_array(env.state)[pair_index] == 0.0
+    if info["refresh_success_boolean"]:
+        sensor_type_index = info["scheduled_sensor_type_index"]
+        assert env.state.sensor_type_aoi_slots_array[sensor_type_index] >= sample_age
+
+
+def test_arrival_process_adds_sample_age_observation_block():
+    legacy_env = LeaderSynchronizationEnv(_config_with_arrival_rate(None))
+    arrival_env = LeaderSynchronizationEnv(_config_with_arrival_rate(0.5))
+    max_pair_count = legacy_env.simulation_config.system.max_pair_count_for_action_space
+    assert arrival_env.observation_space.shape[0] == legacy_env.observation_space.shape[0] + max_pair_count
+    obs, _ = arrival_env.reset(seed=1)
+    assert obs.shape == arrival_env.observation_space.shape
+
+
+def test_large_arrival_rate_matches_legacy_feasibility():
+    legacy_env = LeaderSynchronizationEnv(_config_with_arrival_rate(None))
+    dense_env = LeaderSynchronizationEnv(_config_with_arrival_rate(50.0))
+    legacy_env.reset(seed=1)
+    dense_env.reset(seed=1)
+    assert legacy_env.dynamics.get_feasible_pair_indices(legacy_env.state) == dense_env.dynamics.get_feasible_pair_indices(dense_env.state)

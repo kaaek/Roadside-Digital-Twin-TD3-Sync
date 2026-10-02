@@ -219,15 +219,11 @@ class GreedyWeightedAoiPolicy(_EpisodeSupplierBlacklistMixin):
         return action
 
     def _build_shared_scoring_arrays(self, environment: LeaderSynchronizationEnv) -> dict[str, np.ndarray | float]:
-        slot_index = min(
-            int(environment.state.time_slot_index),
-            environment.simulation_config.system.time_horizon_slots - 1,
-        )
         uplink_rate_bits_per_second_array = environment.dynamics.compute_uplink_rate_array_by_pair(environment.state)
         return {
             "priority_weight_array_by_sensor_type": environment.scenario.priority_weight_array_by_sensor_type(),
             "sensor_type_aoi_slots_array": environment.state.sensor_type_aoi_slots_array,
-            "available_data_size_bits_array": environment.scenario.available_data_size_bits_matrix[slot_index],
+            "available_data_size_bits_array": environment.dynamics.get_available_data_size_bits_array(environment.state),
             "uplink_rate_bits_per_second_array": uplink_rate_bits_per_second_array,
             "uplink_capacity_bits_array": uplink_rate_bits_per_second_array
             * environment.simulation_config.system.slot_duration_seconds,

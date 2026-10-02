@@ -42,6 +42,11 @@ class RoadConfig:
 class DataGenerationConfig:
     low_multiplier: float = constants.DEFAULT_DATA_SIZE_LOW_MULTIPLIER
     high_multiplier: float = constants.DEFAULT_DATA_SIZE_HIGH_MULTIPLIER
+    sample_arrival_rate_per_slot: float | None = constants.DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT
+
+    @property
+    def has_sample_arrival_process(self) -> bool:
+        return self.sample_arrival_rate_per_slot is not None
 
 @dataclass(frozen=True)
 class SimulationConfig:

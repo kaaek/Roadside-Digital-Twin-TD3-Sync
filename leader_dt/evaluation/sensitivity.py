@@ -98,5 +98,6 @@ class SensitivityEvaluator:
             "zone_size_meter": "zone_size_meter",
             "data_size_low_multiplier": "data_generation.low_multiplier",
             "data_size_high_multiplier": "data_generation.high_multiplier",
+            "sample_arrival_rate": "data_generation.sample_arrival_rate_per_slot",
         }
         return alias_dictionary.get(parameter_name, parameter_name)

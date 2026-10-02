@@ -36,6 +36,7 @@ PARAMETER_LABEL_DICTIONARY = {
     "sensors_per_vehicle": "Number of sensors per vehicle",
     "accuracy_threshold": "Accuracy threshold",
     "data_size_high_multiplier": "Task-size upper multiplier",
+    "sample_arrival_rate": "Sample arrival rate (samples/slot)",
     "sensor_type_count": "Number of sensor types",
     "vehicle_count": "Number of vehicles",
     "uplink_bandwidth_hz": "Uplink bandwidth (Hz)",

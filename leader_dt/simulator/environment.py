@@ -68,11 +68,10 @@ class LeaderSynchronizationEnv(gym.Env):
         if self.state is None:
             raise RuntimeError("Environment must be reset before step().")
         feasible_pair_indices = self.dynamics.get_feasible_pair_indices(self.state)
-        slot_index = min(self.state.time_slot_index, self.simulation_config.system.time_horizon_slots - 1)
         scheduling_action = self.action_decoder.decode_rl_action(
             raw_action_array=action,
             feasible_pair_indices=feasible_pair_indices,
-            available_data_size_bits_array=self.scenario.available_data_size_bits_matrix[slot_index],
+            available_data_size_bits_array=self.dynamics.get_available_data_size_bits_array(self.state),
             uplink_capacity_bits_array=self.dynamics.compute_uplink_capacity_bits_array(self.state),
             deterministic=True,
             random_generator=self.random_generator,

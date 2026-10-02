@@ -73,6 +73,10 @@ python scripts/train_ppo_until_convergence.py \
   --monitor-log-dir results/ppo_smoke_seed1_cpu/monitor
 ```
 
+## Sample Arrival Rate
+
+Training uses `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` from `leader_dt/constants.py` (nominal `0.10`). Override it per run with `--sample-arrival-rate <lambda>` on `scripts/train_ppo_until_convergence.py`. Models trained with the arrival process have a 1284-value observation and cannot be evaluated in legacy mode (rate `None`), or the reverse.
+
 ## Outputs
 
 - `results/<run>/models/best_ppo_exact_pair_zone_b.zip`
