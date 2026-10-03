@@ -101,7 +101,7 @@ def plot_sensitivity_curves(
             },
         )
 
-        ax.plot(
+        (line,) = ax.plot(
             x_values,
             y_values,
             label=policy_name,
@@ -112,6 +112,14 @@ def plot_sensitivity_curves(
             markersize=5.5,
             alpha=0.95,
         )
+        between_seed_std_values = [
+            point.policy_results[policy_name].metric_between_seed_std_dictionary.get(metric_name)
+            for point in sensitivity_result_list
+        ]
+        if all(value is not None for value in between_seed_std_values):
+            # Spread across independently trained models (one per training seed).
+            band = np.asarray(between_seed_std_values, dtype=float)
+            ax.fill_between(x_values, y_values - band, y_values + band, color=line.get_color(), alpha=0.18, linewidth=0)
 
     parameter_name = sensitivity_result_list[0].parameter_name
 

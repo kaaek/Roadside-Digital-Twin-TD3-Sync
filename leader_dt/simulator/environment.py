@@ -25,6 +25,8 @@ class LeaderSynchronizationEnv(gym.Env):
     feasible pair with the highest weighted feature score is scheduled.  Heuristic
     baselines pass a ``PairSchedulingRequest`` to ``step`` instead.
     Observation: see ``ObservationBuilder``.
+    Seeding: ``reset(seed=s)`` regenerates the scenario deterministically from
+    ``s``; ``reset()`` draws the next scenario from the same random stream.
     """
 
     metadata = {"render_modes": []}
@@ -63,9 +65,11 @@ class LeaderSynchronizationEnv(gym.Env):
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         super().reset(seed=seed)
-        effective_seed = seed if seed is not None else self.simulation_config.random_seed
-        self.random_generator = np.random.default_rng(effective_seed)
-        self.scenario = self.scenario_generator.generate(seed=effective_seed)
+        # An explicit seed reseeds the scenario stream; ``None`` (e.g. an SB3
+        # auto-reset) continues it, so consecutive episodes draw new scenarios.
+        if seed is not None:
+            self.random_generator = np.random.default_rng(seed)
+        self.scenario = self.scenario_generator.generate(seed=seed)
         self.dynamics = self._build_dynamics()
         self.state = self.dynamics.initialize_state()
         self.episode_record = EpisodeRecord()

@@ -18,15 +18,17 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from leader_dt import constants  # noqa: E402
 from leader_dt.config import SimulationConfig  # noqa: E402
-from leader_dt.evaluation.monte_carlo import MonteCarloEvaluator, MonteCarloResult  # noqa: E402
+from leader_dt.evaluation.monte_carlo import (  # noqa: E402
+    MonteCarloEvaluator,
+    MonteCarloResult,
+    aggregate_monte_carlo_results,
+)
 from leader_dt.evaluation.policy_factory import build_policy_dictionary  # noqa: E402
 from leader_dt.evaluation.reporting import ReportWriter  # noqa: E402
 from leader_dt.evaluation.sensitivity import SensitivityPointResult  # noqa: E402
@@ -456,45 +458,6 @@ def make_environment_factory(simulation_config: SimulationConfig):
         return LeaderSynchronizationEnv(simulation_config)
 
     return environment_factory
-
-
-def aggregate_monte_carlo_results(
-    policy_name: str,
-    result_list: list[MonteCarloResult],
-    training_seeds: list[int] | None = None,
-) -> MonteCarloResult:
-    """Aggregate several Monte Carlo results into one paper-facing result."""
-    if not result_list:
-        raise ValueError("result_list must not be empty.")
-
-    flattened_rows: list[dict[str, Any]] = []
-    for result_index, result in enumerate(result_list):
-        training_seed = None if training_seeds is None else training_seeds[result_index]
-        for row in result.per_trial_metric_list:
-            enriched_row = dict(row)
-            if training_seed is not None:
-                enriched_row["training_seed_integer"] = int(training_seed)
-            flattened_rows.append(enriched_row)
-
-    metric_keys = [
-        key
-        for key in flattened_rows[0].keys()
-        if key != "training_seed_integer" and isinstance(flattened_rows[0][key], (int, float, np.integer, np.floating))
-    ]
-    mean = {
-        key: float(np.mean([float(row[key]) for row in flattened_rows]))
-        for key in metric_keys
-    }
-    std = {
-        key: float(np.std([float(row[key]) for row in flattened_rows]))
-        for key in metric_keys
-    }
-    return MonteCarloResult(
-        policy_name=policy_name,
-        metric_mean_dictionary=mean,
-        metric_std_dictionary=std,
-        per_trial_metric_list=flattened_rows,
-    )
 
 
 def evaluate_baseline_policies(

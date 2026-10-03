@@ -54,13 +54,13 @@ def main() -> None:
         "--td3-model-path",
         type=str,
         default=None,
-        help="Optional Stable-Baselines3 TD3 checkpoint path.",
+        help="Optional Stable-Baselines3 TD3 checkpoint path, or comma-separated paths (one per training seed).",
     )
     parser.add_argument(
         "--ppo-model-path",
         type=str,
         default=None,
-        help="Optional Stable-Baselines3 PPO checkpoint path.",
+        help="Optional Stable-Baselines3 PPO checkpoint path, or comma-separated paths (one per training seed).",
     )
     parser.add_argument("--output-dir", type=str, default="results/metrics")
     parser.add_argument(

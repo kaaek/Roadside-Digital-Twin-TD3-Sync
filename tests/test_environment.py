@@ -225,3 +225,51 @@ def test_pair_features_are_bounded_and_reachable_accuracy_matches_capacity():
     assert np.allclose(features[with_sample, column], np.minimum(1.0, capacity[with_sample] / sizes[with_sample]))
     assert np.all(features[~with_sample, column] == 0.0)
 
+
+
+def _initial_positions(env: LeaderSynchronizationEnv) -> np.ndarray:
+    return env.scenario.initial_vehicle_positions_meter_array.copy()
+
+
+def test_unseeded_reset_draws_a_new_scenario():
+    env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
+    env.reset(seed=1)
+    first_positions = _initial_positions(env)
+    env.reset()
+    assert not np.allclose(first_positions, _initial_positions(env))
+
+
+def test_seeded_reset_is_reproducible_across_instances():
+    first_env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
+    second_env = LeaderSynchronizationEnv(SimulationConfig(random_seed=7))
+    first_env.reset()
+    first_env.reset(seed=42)
+    second_env.reset(seed=42)
+    assert np.allclose(_initial_positions(first_env), _initial_positions(second_env))
+
+
+def test_vec_env_auto_resets_follow_a_reproducible_scenario_sequence():
+    from stable_baselines3.common.vec_env import DummyVecEnv
+
+    def collect_positions(training_seed: int) -> list[np.ndarray]:
+        vec_env = DummyVecEnv([lambda: LeaderSynchronizationEnv(SimulationConfig(random_seed=training_seed))])
+        vec_env.seed(training_seed)
+        vec_env.reset()
+        base_env = vec_env.envs[0]
+        positions = [_initial_positions(base_env)]
+        action = np.zeros((1, *vec_env.action_space.shape), dtype=np.float32)
+        for _ in range(2):
+            done = False
+            while not done:
+                _, _, dones, _ = vec_env.step(action)
+                done = bool(dones[0])
+            positions.append(_initial_positions(base_env))
+        return positions
+
+    first_run = collect_positions(training_seed=1)
+    second_run = collect_positions(training_seed=1)
+    assert not np.allclose(first_run[0], first_run[1])
+    assert not np.allclose(first_run[1], first_run[2])
+    for first, second in zip(first_run, second_run):
+        assert np.allclose(first, second)
+    assert not np.allclose(first_run[0], collect_positions(training_seed=2)[0])

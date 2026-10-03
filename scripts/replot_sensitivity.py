@@ -28,6 +28,7 @@ def load_sensitivity_results(json_path: Path) -> list[SensitivityPointResult]:
                 policy_name=policy_payload["policy_name"],
                 metric_mean_dictionary=policy_payload["metric_mean_dictionary"],
                 metric_std_dictionary=policy_payload["metric_std_dictionary"],
+                metric_between_seed_std_dictionary=policy_payload.get("metric_between_seed_std_dictionary", {}),
                 per_trial_metric_list=policy_payload.get("per_trial_metric_list", []),
             )
 

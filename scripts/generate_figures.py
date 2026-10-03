@@ -19,6 +19,7 @@ def load_monte_carlo_results(path: str | Path) -> dict[str, MonteCarloResult]:
             policy_name=payload["policy_name"],
             metric_mean_dictionary=payload["metric_mean_dictionary"],
             metric_std_dictionary=payload["metric_std_dictionary"],
+            metric_between_seed_std_dictionary=payload.get("metric_between_seed_std_dictionary", {}),
             per_trial_metric_list=payload["per_trial_metric_list"],
         )
     return results

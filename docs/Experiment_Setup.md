@@ -20,6 +20,8 @@ The nominal configuration defines the environment that TD3/PPO train on. It incl
 
 Scenario randomness includes vehicle positions, sensor assignment, sample sizes, sample arrivals, and mobility conditions. Training uses a training seed. Evaluation uses independent seed ranges such as `50000, 50001, ...` so all policies face the same scenarios.
 
+Seeding contract of `LeaderSynchronizationEnv.reset`: `reset(seed=s)` regenerates the scenario deterministically from `s`; `reset()` draws the next scenario from the same random stream. Stable-Baselines3 passes the training seed only on the first reset and auto-resets with no seed, so a training run with seed `k` sees a reproducible but different scenario every episode. (Before this contract, unseeded resets fell back to `SimulationConfig.random_seed`, so every training episode repeated one scenario; models trained before the fix are superseded.)
+
 ### TD3 training setup
 
 TD3 is trained with an MLP actor/critic, Gaussian action noise, replay buffer, target policy smoothing, periodic evaluation, checkpoints, Monitor logs, and TensorBoard logs. The best model is selected by mean evaluation return over multiple evaluation episodes.
@@ -32,13 +34,15 @@ PPO is trained with an MLP actor-critic, on-policy rollouts, GAE, clipped policy
 
 Monte Carlo keeps the environment parameters fixed and runs many independent seeded scenarios. It produces means and standard deviations for metrics such as average weighted AoI, maximum AoI, freshness violations, accuracy violations, terminal CPU violations, final CPU backlog, total collected bits, mean accuracy, reward, and penalized score.
 
+TD3 and PPO can be evaluated as a group of models, one per training seed: pass comma-separated checkpoint paths to `--td3-model-path` / `--ppo-model-path`. Every model runs on the same scenario seeds, the per-trial rows are pooled (tagged `training_seed_integer`, read from a `seed_<k>` path component), and `metric_between_seed_std_dictionary` holds the std of the per-model means. Sensitivity plots draw that between-seed std as a shaded band around the RL curves.
+
 ### Sensitivity sweeps
 
 Sensitivity sweeps keep trained models fixed and change one environment parameter at a time. Each parameter value runs a full Monte Carlo evaluation. Current priority sweeps include vehicle count, task size (`data_size_high_multiplier`), sensors per vehicle, accuracy threshold, and sample arrival rate (`sample_arrival_rate`). One trained model can be evaluated across all of these sweeps, including vehicle count and arrival rate, because its 7-value action and 80-value observation do not depend on them.
 
 ### Final results pipeline
 
-`generate_final_results.sh` runs the final pipeline in the background with the project interpreter (`.venv/bin/python`): it trains TD3 (CUDA) and PPO (CPU) until convergence, then runs the vehicle-count sweep on the resulting best models. The task-size sweep and the sensor-type scalability run are present but commented out. Output goes to `logs/final_results.log`; `check_progress.sh` follows it.
+`generate_final_results.sh` runs the final pipeline in the background with the project interpreter (`.venv/bin/python`): for each training seed in `TRAINING_SEEDS` (default `1 2 3 4 5`) it trains TD3 (CUDA) and PPO (CPU) into `results/convergence_{td3,ppo}/seed_<k>/`, then runs the vehicle-count and task-size sweeps with all seeds' best models pooled per algorithm. The sensor-type scalability run is present but commented out. Output goes to `logs/final_results.log`; `check_progress.sh` follows it.
 
 ### Plotting standard
 
