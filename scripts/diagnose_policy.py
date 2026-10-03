@@ -4,6 +4,9 @@ For each policy the script reports average weighted AoI, the share of uploads
 that fail the accuracy threshold, the mean distance rank of the scheduled pair
 among feasible pairs (0 = closest, 0.5 = random), and the share of picks whose
 link cannot carry the accuracy threshold of the pending sample in one slot.
+It also reports leader CPU load (share of slots ending with a backlog, mean
+backlog in slots of CPU work), terminal CPU violations, freshness violations
+per slot, and the share of slots with no upload.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -54,6 +57,9 @@ def diagnose(policy, simulation_config: SimulationConfig, seeds: range) -> dict[
     accuracy_threshold = simulation_config.system.accuracy_threshold
     average_aoi_list, distance_rank_list = [], []
     upload_count = failed_upload_count = decision_count = unreachable_pick_count = 0
+    slot_count = cpu_busy_slot_count = idle_slot_count = terminal_cpu_violation_count = 0
+    cpu_backlog_slots_list, freshness_violation_list = [], []
+    slot_cpu_capacity_cycles = simulation_config.system.leader_cpu_frequency_cycles_per_second * simulation_config.system.slot_duration_seconds
     for seed in seeds:
         env = LeaderSynchronizationEnv(replace(simulation_config, random_seed=seed))
         env.reset(seed=seed)
@@ -66,8 +72,15 @@ def diagnose(policy, simulation_config: SimulationConfig, seeds: range) -> dict[
             size_array = env.dynamics.get_available_data_size_bits_array(env.state)
             _, _, done, _, info = env.step(policy.select_action(env))
             weighted_aoi_sum += info["weighted_aoi_float"]
+            slot_count += 1
+            cpu_backlog_cycles = env.state.cpu_backlog_cycles_float
+            cpu_busy_slot_count += int(cpu_backlog_cycles > 1.0e-9)
+            cpu_backlog_slots_list.append(cpu_backlog_cycles / slot_cpu_capacity_cycles)
+            freshness_violation_list.append(info["freshness_violation_count_integer"])
+            terminal_cpu_violation_count += info["terminal_cpu_violation_count_integer"]
             scheduled_pair = env.episode_record.step_records[-1].scheduled_pair_index
             if scheduled_pair is None:
+                idle_slot_count += 1
                 continue
             upload_count += 1
             failed_upload_count += int(not info["refresh_success_boolean"])
@@ -81,6 +94,11 @@ def diagnose(policy, simulation_config: SimulationConfig, seeds: range) -> dict[
         "failed_upload_share": failed_upload_count / max(upload_count, 1),
         "mean_distance_rank": float(np.mean(distance_rank_list)) if distance_rank_list else float("nan"),
         "unreachable_pick_share": unreachable_pick_count / max(decision_count, 1),
+        "cpu_busy_slot_share": cpu_busy_slot_count / max(slot_count, 1),
+        "mean_cpu_backlog_slots": float(np.mean(cpu_backlog_slots_list)) if cpu_backlog_slots_list else 0.0,
+        "terminal_cpu_violation_share": terminal_cpu_violation_count / max(len(seeds), 1),
+        "freshness_violations_per_slot": float(np.mean(freshness_violation_list)) if freshness_violation_list else 0.0,
+        "idle_slot_share": idle_slot_count / max(slot_count, 1),
     }
 
 
@@ -99,12 +117,18 @@ def main() -> None:
         simulation_config = replace(simulation_config, system=replace(simulation_config.system, vehicle_count=args.vehicle_count))
     seeds = range(args.seed_start, args.seed_start + args.trials)
 
-    print(f"{'Policy':<12} {'AoI':>7} {'Failed':>8} {'DistRank':>9} {'Unreachable':>12}")
+    print(
+        f"{'Policy':<12} {'AoI':>7} {'Failed':>8} {'DistRank':>9} {'Unreachable':>12} "
+        f"{'CPUbusy':>8} {'Backlog':>8} {'TermCPU':>8} {'Fresh/slot':>11} {'Idle':>6}"
+    )
     for policy_name in [name.strip() for name in args.policies.split(",") if name.strip()]:
         result = diagnose(build_policy(policy_name, args.td3_model_path, args.ppo_model_path), simulation_config, seeds)
         print(
             f"{policy_name:<12} {result['average_weighted_aoi']:>7.2f} {result['failed_upload_share']:>8.0%} "
-            f"{result['mean_distance_rank']:>9.2f} {result['unreachable_pick_share']:>12.0%}"
+            f"{result['mean_distance_rank']:>9.2f} {result['unreachable_pick_share']:>12.0%} "
+            f"{result['cpu_busy_slot_share']:>8.0%} {result['mean_cpu_backlog_slots']:>8.2f} "
+            f"{result['terminal_cpu_violation_share']:>8.0%} {result['freshness_violations_per_slot']:>11.2f} "
+            f"{result['idle_slot_share']:>6.0%}"
         )
 
 

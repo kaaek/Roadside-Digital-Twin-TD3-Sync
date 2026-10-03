@@ -13,10 +13,13 @@ from leader_dt.types import VehicleId, SensorTypeId, SensorPairId
 @dataclass(frozen=True)
 class Scenario:
     """
-    All exogenous data for one episode. Vehicle positions move physically each slot.
+    All exogenous data for one episode. Vehicle positions move physically each slot;
+    every vehicle, the leader included, draws its speed from the same traffic distribution.
     Available data sizes δ_i(t) are sampled per vehicle-sensor pair and per slot.
     δ_i(t) is the size of the sample that arrives at slot t; whether a sample
     arrives is given by the arrival-count matrix.
+    Shadowing is log-normal per vehicle and slot, drawn i.i.d. (spatial correlation ignored);
+    all sensors of a vehicle share its link.
     """
 
     vehicles: list[Vehicle]
@@ -27,6 +30,7 @@ class Scenario:
     sensor_ownership_matrix: np.ndarray
     available_data_size_bits_matrix: np.ndarray  # shape: time_horizon × pair_count
     sample_arrival_count_matrix: np.ndarray  # shape: time_horizon × pair_count
+    shadowing_db_matrix: np.ndarray  # shape: time_horizon × vehicle_count
 
     @property
     def pair_count(self) -> int:
@@ -93,6 +97,11 @@ class ScenarioGenerator:
             pair_count=sensor_pair_index.pair_count(),
             time_horizon_slots=self.simulation_config.system.time_horizon_slots,
         )
+        shadowing = self.random_generator.normal(
+            loc=0.0,
+            scale=self.simulation_config.communication.shadowing_std_db,
+            size=(self.simulation_config.system.time_horizon_slots, len(vehicles)),
+        )
         return Scenario(
             vehicles=vehicles,
             sensor_types=sensor_types,
@@ -102,6 +111,7 @@ class ScenarioGenerator:
             sensor_ownership_matrix=ownership_matrix,
             available_data_size_bits_matrix=data_sizes,
             sample_arrival_count_matrix=arrival_counts,
+            shadowing_db_matrix=shadowing,
         )
 
     def _generate_vehicles(self) -> list[Vehicle]:
@@ -117,9 +127,6 @@ class ScenarioGenerator:
             size=system.vehicle_count,
         )
         speeds = np.maximum(speeds, 0.1)
-        # Make the leader traverse Zone B over the horizon by default.
-        zone_length = max(zone_end - zone_start, 1.0)
-        speeds[0] = zone_length / max(system.time_horizon_slots * system.slot_duration_seconds, constants.EPSILON_FLOAT)
         return [
             Vehicle(
                 vehicle_id=VehicleId(index),

@@ -130,7 +130,14 @@ class LeaderSynchronizationDynamics:
         return distances
 
     def compute_uplink_rate_array_by_pair(self, state: SimulationState) -> np.ndarray:
-        return self.uplink_rate_model.compute_rate_vector_bits_per_second(self.compute_distance_array_by_pair(state))
+        """Uplink rate of each pair's carrier, using the current slot's shadowing."""
+        shadowing_matrix = self.scenario.shadowing_db_matrix
+        slot_index = min(int(state.time_slot_index), shadowing_matrix.shape[0] - 1)
+        shadowing_db_by_pair = shadowing_matrix[slot_index][self.scenario.vehicle_index_array_by_pair()]
+        return self.uplink_rate_model.compute_rate_vector_bits_per_second(
+            self.compute_distance_array_by_pair(state),
+            shadowing_db_by_pair,
+        )
 
     def compute_uplink_capacity_bits_array(self, state: SimulationState) -> np.ndarray:
         return self.compute_uplink_rate_array_by_pair(state) * self.simulation_config.system.slot_duration_seconds

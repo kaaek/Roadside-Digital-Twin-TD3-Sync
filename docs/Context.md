@@ -44,7 +44,7 @@ At every time slot, the simulator performs the following sequence:
 2. Determine which provider-sensor pairs are feasible: the carrier vehicle must be inside Zone B and the pair must hold a pending sensor sample.
 3. Build the observation seen by TD3/PPO.
 4. Let the selected policy choose a pair and an accuracy request.
-5. Compute the achievable communication rate based on the Shannon/Okumara-Hata pathloss model.
+5. Compute the achievable communication rate from the 3GPP TR 37.885 highway pathloss, the slot's shadowing, and Shannon capacity.
 6. Determine how much data is actually collected.
 7. Check whether the achieved accuracy satisfies the threshold.
 8. Update the sensor-type Age of Information / Age of Digital Twin.
@@ -74,7 +74,8 @@ The current nominal configuration uses:
 * 40 time slots.
 * A defective zone from 0 m to 2000 m.
 * A 1-second slot duration.
-* Sample sizes drawn uniformly between 0.3× and 6.3× each sensor type's nominal payload.
+* Sample sizes drawn uniformly between 0.5× and 2.0× each sensor type's nominal payload.
+* All vehicles, the leader included, drive at speeds drawn from N(23, 4) m/s; the leader starts at the zone entry.
 * A sample arrival rate of $\lambda = 0.10$ new samples per pair per slot (Section 3.2).
 
 With 20 vehicles and 4 sensors per vehicle, the nominal number of real provider-sensor pairs is:
@@ -105,9 +106,17 @@ where:
 
 * $R_i(t)$ is the uplink rate for pair $i$ at time slot $t$.
 * $B$ is the uplink bandwidth.
-* $\mathrm{SNR}_i(t)$ depends on transmit power, noise, pathloss, and distance.
+* $\mathrm{SNR}_i(t) = P\,10^{(-\mathrm{PL}(d) + X_v(t))/10} / (N_0 B)$.
 
-As distance increases, pathloss increases, SNR decreases, and the achievable data rate decreases. This makes proximity a major factor in scheduling quality. A far vehicle may carry an urgent sensor, but if the communication channel is weak, the leader may collect too little data to meet the required accuracy. In that case, the update may fail to refresh the Digital Twin.
+The pathloss follows the 3GPP TR 37.885 highway line-of-sight model at $f_c = 5.9$ GHz:
+
+$$
+\mathrm{PL}(d) = 32.4 + 20\log_{10} f_c[\mathrm{GHz}] + 20\log_{10} d[\mathrm{m}] \quad (\mathrm{dB})
+$$
+
+$X_v(t) \sim \mathcal{N}(0, 3^2)$ dB is log-normal shadowing, drawn per vehicle and slot (i.i.d.; spatial correlation is ignored) and shared by all sensors of that vehicle. The nominal link uses $P = 23$ dBm, a noise PSD of $-174$ dBm/Hz plus a 9 dB noise figure, and $B = 1.8$ MHz, i.e. one LTE-V2X sub-channel (10 resource blocks) of the shared 10 MHz ITS channel. Without shadowing this gives about 22.5 Mbit/s at 100 m, 10.6 Mbit/s at 1 km and 7.1 Mbit/s at 2 km, so a 10 Mbit LiDAR cloud may not reach the 0.8 accuracy threshold in one slot from far away.
+
+As distance increases, pathloss increases, SNR decreases, and the achievable data rate decreases. A far vehicle may carry an urgent sensor, but if the communication channel is weak, the leader may collect too little data to meet the required accuracy. In that case, the update may fail to refresh the Digital Twin.
 
 #### Sensor Sample Generation
 
@@ -125,7 +134,7 @@ $$
 
 With the nominal $\lambda = 0.10$, each pair produces a new sample in about 9.5% of slots, roughly one every 10 seconds. Across the 80 nominal pairs, a few new samples still appear in the zone every slot, but a particular sensor on a particular vehicle usually has nothing new to offer. This makes data availability, not only geometry, a scheduling constraint. Waiting is also costly, because a pending sample keeps ageing until it is uploaded.
 
-Each sample's size $\delta_i(t)$ is drawn uniformly between 0.3× and 6.3× its sensor type's nominal payload. Arrivals and sizes are pre-generated per episode from the scenario seed. Setting the rate to `None` gives every pair a fresh sample in every slot (no arrival process).
+Each sample's size $\delta_i(t)$ is drawn uniformly between 0.5× and 2.0× its sensor type's nominal payload. Nominal payloads are one digital-twin update: a compressed camera frame (3 Mbit) or LiDAR point cloud (10 Mbit), a radar object list (0.4 Mbit), or a short telemetry message (0.25–16 kbit). Arrivals and sizes are pre-generated per episode from the scenario seed. Setting the rate to `None` gives every pair a fresh sample in every slot (no arrival process).
 
 The rate is set by `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` in `leader_dt/constants.py`, by `--sample-arrival-rate` on the convergence training scripts, or swept with the `sample_arrival_rate` sensitivity parameter.
 
@@ -169,7 +178,7 @@ where:
 
 * $C_i(t)$ is the added CPU work.
 * $b_i(t)$ is the number of collected bits.
-* $\rho_i$ is the CPU cycles per bit for the selected sensor type.
+* $\rho_i$ is the CPU cycles per bit for the selected sensor type: hundreds for perception data (camera 500, LiDAR 800, radar 100), tens for telemetry, following common MEC values.
 
 At each slot, the leader can process a limited number of CPU cycles:
 
@@ -185,10 +194,10 @@ where:
 The current nominal CPU frequency is:
 
 $$
-f_{\text{CPU}} = 2.5 \times 10^6 \text{ cycles/s}
+f_{\text{CPU}} = 2.0 \times 10^9 \text{ cycles/s}
 $$
 
-with $\Delta t = 1 \text{ s}$. So the leader has a processing speed of 2.5 MHz, i.e. 2.5 million slots per second.
+with $\Delta t = 1 \text{ s}$, i.e. one 2 GHz application core of an automotive SoC. A nominal camera frame (3 Mbit × 500 cycles/bit) takes 0.75 s of CPU, and a LiDAR point cloud about 4 s, so heavy perception uploads build a backlog.
 
 CPU backlog is important because a policy that aggressively collects high-volume sensor data may reduce AoI in the short term but leave excessive processing work unfinished. This creates a tradeoff between freshness improvement and computational feasibility.
 
@@ -350,7 +359,7 @@ More vehicles can help because there are more possible data sources. However, mo
 
 ### 8.3 Data-Size-High-Multiplier Sensitivity
 
-This experiment varies the upper multiplier controlling sensor data size from 1 till 4 (the nominal value is 6.3). The purpose is to test what happens as sensor updates become heavier. Larger data sizes can make the problem harder because they require more upload time, increase CPU processing demand, make it harder to satisfy the accuracy threshold, and increase the chance that urgent sensors remain stale.
+This experiment varies the upper multiplier controlling sensor data size from 1 till 4 (the nominal value is 2.0). The purpose is to test what happens as sensor updates become heavier. Larger data sizes can make the problem harder because they require more upload time, increase CPU processing demand, make it harder to satisfy the accuracy threshold, and increase the chance that urgent sensors remain stale.
 
 ### 8.4 Sensor-Type Scalability
 

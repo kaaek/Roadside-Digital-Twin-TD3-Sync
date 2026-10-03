@@ -17,12 +17,21 @@ DEFAULT_SENSORS_PER_VEHICLE: int = 4
 DEFAULT_FRESHNESS_THRESHOLD_SLOTS: int = 10
 DEFAULT_ACCURACY_THRESHOLD: float = 0.80
 
-DEFAULT_UPLINK_BANDWIDTH_HZ: float = 1_200_000.0
-DEFAULT_V2L_MAX_TRANSMIT_POWER_WATT: float = 1.0
-DEFAULT_NOISE_POWER_SPECTRAL_DENSITY_WATT_PER_HZ: float = 1.0e-12
-DEFAULT_UPLINK_PATHLOSS_EXPONENT: float = 2.3
+# Vehicle-to-leader sidelink, following 3GPP TR 37.885 (highway LOS, 5.9 GHz ITS band):
+# PL_dB = 32.4 + 20 log10(fc_GHz) + 10 n log10(d_m), log-normal shadowing sigma = 3 dB,
+# UE transmit power 23 dBm, noise figure 9 dB.  The leader's uploads get one
+# LTE-V2X sub-channel (10 resource blocks = 1.8 MHz) of the 10 MHz ITS channel,
+# which is shared with the surrounding V2X traffic.
+DEFAULT_UPLINK_BANDWIDTH_HZ: float = 1_800_000.0
+DEFAULT_V2L_MAX_TRANSMIT_POWER_WATT: float = 0.2  # 23 dBm
+# Thermal noise -174 dBm/Hz plus a 9 dB receiver noise figure = -165 dBm/Hz.
+DEFAULT_NOISE_POWER_SPECTRAL_DENSITY_WATT_PER_HZ: float = 10.0 ** ((-174.0 + 9.0) / 10.0) / 1000.0
+DEFAULT_UPLINK_PATHLOSS_EXPONENT: float = 2.0
+DEFAULT_CARRIER_FREQUENCY_GHZ: float = 5.9
+DEFAULT_SHADOWING_STD_DB: float = 3.0
 
-DEFAULT_LEADER_CPU_FREQUENCY_CYCLES_PER_SECOND: float = 2_500_000.0
+# One application core of an automotive SoC / on-board unit (1.5-2.5 GHz class).
+DEFAULT_LEADER_CPU_FREQUENCY_CYCLES_PER_SECOND: float = 2.0e9
 
 DEFAULT_LANE_LENGTH_METER: float = 2000.0
 DEFAULT_DEFECTIVE_ZONE_START_METER: float = 0.0
@@ -33,10 +42,8 @@ DEFAULT_VEHICLE_SPEED_JITTER_STD_METER_PER_SECOND: float = 4
 # Data-size sampling: each delta_i(t) is sampled uniformly around the nominal
 # sensor-type payload size. This keeps the paper's time-dependent delta_i(t)
 # while remaining simple and reproducible.
-# DEFAULT_DATA_SIZE_LOW_MULTIPLIER: float = 0.30
-# DEFAULT_DATA_SIZE_HIGH_MULTIPLIER: float = 1.70
-DEFAULT_DATA_SIZE_LOW_MULTIPLIER: float = 0.30
-DEFAULT_DATA_SIZE_HIGH_MULTIPLIER: float = 6.30
+DEFAULT_DATA_SIZE_LOW_MULTIPLIER: float = 0.50
+DEFAULT_DATA_SIZE_HIGH_MULTIPLIER: float = 2.00
 
 # Sample arrival process: each vehicle-sensor pair receives Poisson(lambda) new
 # samples per slot and keeps only its latest unsent sample, so a pair holds a
@@ -45,119 +52,126 @@ DEFAULT_DATA_SIZE_HIGH_MULTIPLIER: float = 6.30
 # 0.10 gives each pair a new sample in ~10% of slots (about one every 10 s).
 DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT: float | None = 0.10
 
-# Sensor definitions are ordered by sensor_type_id.
+# Sensor definitions are ordered by sensor_type_id.  Payload sizes are one
+# update for the digital twin: a compressed frame / point cloud for perception
+# sensors, a short status message or sample window for telemetry.  Processing
+# cost follows the MEC literature: hundreds of cycles/bit for perception data
+# (detection, fusion), tens for parsing telemetry.  Sensing delay is the
+# capture/acquisition time in slots (1 slot = 1 s): ~33 ms camera frame, ~100 ms
+# LiDAR sweep or GNSS fix, ~10 ms for bus-read telemetry.  The default 8 types
+# (the first 8 entries) include LiDAR so that heavy perception data is present.
 DEFAULT_SENSOR_DEFINITIONS: tuple[dict, ...] = (
     {
         "name": "Front Camera",
         "priority_weight": 3.0,
-        "cpu_cycles_per_bit": 15.0,
-        "sensing_delay_slots": 1.0,
-        "nominal_data_size_bits": 300_000.0,
+        "cpu_cycles_per_bit": 500.0,
+        "sensing_delay_slots": 0.033,
+        "nominal_data_size_bits": 3_000_000.0,
     },
     {
         "name": "Radar",
         "priority_weight": 2.2,
-        "cpu_cycles_per_bit": 2.0,
-        "sensing_delay_slots": 0.2,
-        "nominal_data_size_bits": 80_000.0,
+        "cpu_cycles_per_bit": 100.0,
+        "sensing_delay_slots": 0.05,
+        "nominal_data_size_bits": 400_000.0,
     },
     {
         "name": "Engine Temperature",
         "priority_weight": 2.0,
-        "cpu_cycles_per_bit": 3.0,
-        "sensing_delay_slots": 0.3,
-        "nominal_data_size_bits": 60_000.0,
+        "cpu_cycles_per_bit": 20.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 8_000.0,
     },
     {
         "name": "Battery BMS",
         "priority_weight": 1.8,
-        "cpu_cycles_per_bit": 2.0,
-        "sensing_delay_slots": 0.2,
-        "nominal_data_size_bits": 50_000.0,
+        "cpu_cycles_per_bit": 30.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 16_000.0,
     },
     {
         "name": "Tyre Pressure TPMS",
         "priority_weight": 1.5,
-        "cpu_cycles_per_bit": 8.0,
-        "sensing_delay_slots": 0.8,
-        "nominal_data_size_bits": 200_000.0,
+        "cpu_cycles_per_bit": 10.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 1_000.0,
     },
     {
         "name": "IMU Accelerometer",
         "priority_weight": 1.3,
-        "cpu_cycles_per_bit": 11.0,
-        "sensing_delay_slots": 0.7,
-        "nominal_data_size_bits": 220_000.0,
+        "cpu_cycles_per_bit": 50.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 10_000.0,
+    },
+    {
+        "name": "LiDAR Point Cloud",
+        "priority_weight": 2.8,
+        "cpu_cycles_per_bit": 800.0,
+        "sensing_delay_slots": 0.1,
+        "nominal_data_size_bits": 10_000_000.0,
+    },
+    {
+        "name": "Fuel Level",
+        "priority_weight": 1.0,
+        "cpu_cycles_per_bit": 10.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 250.0,
     },
     {
         "name": "Ambient Weather",
         "priority_weight": 1.2,
         "cpu_cycles_per_bit": 10.0,
-        "sensing_delay_slots": 0.6,
-        "nominal_data_size_bits": 250_000.0,
-    },
-    {
-        "name": "Fuel Level",
-        "priority_weight": 1.0,
-        "cpu_cycles_per_bit": 1.0,
-        "sensing_delay_slots": 0.1,
-        "nominal_data_size_bits": 40_000.0,
-    },
-    {
-        "name": "LiDAR Point Cloud",
-        "priority_weight": 2.8,
-        "cpu_cycles_per_bit": 18.0,
-        "sensing_delay_slots": 1.2,
-        "nominal_data_size_bits": 360_000.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 1_000.0,
     },
     {
         "name": "Brake System Status",
         "priority_weight": 2.6,
-        "cpu_cycles_per_bit": 3.0,
-        "sensing_delay_slots": 0.2,
-        "nominal_data_size_bits": 70_000.0,
+        "cpu_cycles_per_bit": 20.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 1_000.0,
     },
     {
         "name": "Road Friction Estimate",
         "priority_weight": 2.5,
-        "cpu_cycles_per_bit": 9.0,
-        "sensing_delay_slots": 0.6,
-        "nominal_data_size_bits": 180_000.0,
+        "cpu_cycles_per_bit": 100.0,
+        "sensing_delay_slots": 0.05,
+        "nominal_data_size_bits": 4_000.0,
     },
     {
         "name": "Lane Marking Detector",
         "priority_weight": 2.4,
-        "cpu_cycles_per_bit": 14.0,
-        "sensing_delay_slots": 0.9,
-        "nominal_data_size_bits": 260_000.0,
+        "cpu_cycles_per_bit": 200.0,
+        "sensing_delay_slots": 0.033,
+        "nominal_data_size_bits": 16_000.0,
     },
     {
         "name": "V2X Beacon Monitor",
         "priority_weight": 2.1,
-        "cpu_cycles_per_bit": 4.0,
-        "sensing_delay_slots": 0.3,
-        "nominal_data_size_bits": 90_000.0,
+        "cpu_cycles_per_bit": 50.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 20_000.0,
     },
     {
         "name": "Steering Angle Sensor",
         "priority_weight": 1.9,
-        "cpu_cycles_per_bit": 2.5,
-        "sensing_delay_slots": 0.2,
-        "nominal_data_size_bits": 55_000.0,
+        "cpu_cycles_per_bit": 10.0,
+        "sensing_delay_slots": 0.01,
+        "nominal_data_size_bits": 1_000.0,
     },
     {
         "name": "GNSS Position Fix",
         "priority_weight": 1.7,
-        "cpu_cycles_per_bit": 2.0,
+        "cpu_cycles_per_bit": 20.0,
         "sensing_delay_slots": 0.1,
-        "nominal_data_size_bits": 45_000.0,
+        "nominal_data_size_bits": 1_000.0,
     },
     {
         "name": "Acoustic Hazard Sensor",
         "priority_weight": 1.6,
-        "cpu_cycles_per_bit": 7.0,
-        "sensing_delay_slots": 0.5,
-        "nominal_data_size_bits": 160_000.0,
+        "cpu_cycles_per_bit": 300.0,
+        "sensing_delay_slots": 0.05,
+        "nominal_data_size_bits": 256_000.0,
     },
 )
 DEFAULT_TOTAL_TIMESTEPS: int = 500_000
@@ -165,8 +179,10 @@ DEFAULT_TOTAL_TIMESTEPS: int = 500_000
 # CPU-aware Greedy baseline defaults. ``lambda`` is interpreted as a
 # score-space penalty coefficient in weighted-AoI units per normalized CPU
 # backlog slot. The requested accuracy fraction controls how much of a
-# pair's available payload the Greedy policy asks to upload.
-DEFAULT_GREEDY_CPU_LAMBDA: float = 3.0
+# pair's available payload the Greedy policy asks to upload.  10.0 was picked on
+# the realistic defaults (50 seeds): same weighted AoI as 3.0, with terminal CPU
+# violations down from 62% to 22% of episodes.
+DEFAULT_GREEDY_CPU_LAMBDA: float = 10.0
 DEFAULT_GREEDY_REQUESTED_ACCURACY_FRACTION: float = 1.0
 
 # TD3 convergence-training defaults.  These are intentionally centralized so

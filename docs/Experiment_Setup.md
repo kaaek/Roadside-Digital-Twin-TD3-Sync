@@ -14,7 +14,24 @@ Training modules consume the reward and next observation to update TD3 or PPO. E
 
 ### Nominal simulator configuration
 
-The nominal configuration defines the environment that TD3/PPO train on. It includes the defective zone length, episode horizon, vehicle count, number of sensor types, sensors per vehicle, freshness threshold, accuracy threshold, uplink bandwidth, CPU frequency, data-size distribution (0.3× to 6.3× the nominal payload), and sample arrival rate. Each pair generates Poisson($\lambda$) samples per slot and keeps only its latest unsent one; the nominal $\lambda = 0.10$ (`DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT`) gives each pair a new sample in about 10% of slots.
+The nominal configuration defines the environment that TD3/PPO train on. It includes the defective zone length, episode horizon, vehicle count, number of sensor types, sensors per vehicle, freshness threshold, accuracy threshold, uplink bandwidth, CPU frequency, data-size distribution (0.5× to 2.0× the nominal payload), and sample arrival rate. Each pair generates Poisson($\lambda$) samples per slot and keeps only its latest unsent one; the nominal $\lambda = 0.10$ (`DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT`) gives each pair a new sample in about 10% of slots.
+
+Physical values and their sources (all in `leader_dt/constants.py`):
+
+| Quantity | Value | Basis |
+|---|---|---|
+| Pathloss | 32.4 + 20 log10(5.9) + 20 log10(d) dB | 3GPP TR 37.885, highway LOS |
+| Shadowing | log-normal, σ = 3 dB, per vehicle and slot | 3GPP TR 37.885, highway LOS |
+| Transmit power | 23 dBm | C-V2X UE power class |
+| Noise | −174 dBm/Hz + 9 dB noise figure | thermal noise, 3GPP UE noise figure |
+| Bandwidth | 1.8 MHz | one LTE-V2X sub-channel (10 RBs) of the 10 MHz ITS channel |
+| Leader CPU | 2.0 GHz | one automotive SoC / OBU application core |
+| Cycles per bit | 10–800 by sensor | MEC literature: hundreds for perception, tens for telemetry |
+| Payloads | 0.25 kbit (fuel level) to 10 Mbit (LiDAR) | one compressed frame / point cloud, or one telemetry message |
+| Sensing delay | 0.01–0.1 s | frame capture (~33 ms), LiDAR sweep / GNSS fix (~100 ms), bus read (~10 ms) |
+| Vehicle speed | N(23, 4) m/s for every vehicle, leader included | highway traffic |
+
+The default 8 sensor types include LiDAR so that heavy perception data is present. With these values the communication link and the leader CPU both constrain the schedule: on 40–50 seeds, CPU-aware Greedy leaves a CPU backlog at the end of about 22% of episodes and fails the accuracy threshold on about 5% of uploads (`scripts/diagnose_policy.py`).
 
 ### Randomness and seeds
 

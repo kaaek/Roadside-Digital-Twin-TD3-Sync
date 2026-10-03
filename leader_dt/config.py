@@ -23,6 +23,8 @@ class CommunicationConfig:
     noise_power_spectral_density_watt_per_hz: float = constants.DEFAULT_NOISE_POWER_SPECTRAL_DENSITY_WATT_PER_HZ
     pathloss_exponent: float = constants.DEFAULT_UPLINK_PATHLOSS_EXPONENT
     reference_distance_meter: float = constants.REFERENCE_DISTANCE_METER
+    carrier_frequency_ghz: float = constants.DEFAULT_CARRIER_FREQUENCY_GHZ
+    shadowing_std_db: float = constants.DEFAULT_SHADOWING_STD_DB
 
 @dataclass(frozen=True)
 class RoadConfig:

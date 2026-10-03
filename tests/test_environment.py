@@ -273,3 +273,27 @@ def test_vec_env_auto_resets_follow_a_reproducible_scenario_sequence():
     for first, second in zip(first_run, second_run):
         assert np.allclose(first, second)
     assert not np.allclose(first_run[0], collect_positions(training_seed=2)[0])
+
+
+def test_uplink_rate_follows_3gpp_highway_los():
+    from leader_dt.config import CommunicationConfig
+    from leader_dt.models.communication import UplinkRateModel
+
+    # Full 10 MHz ITS channel: Shannon rate at 1 km is about 35 Mbit/s.
+    model = UplinkRateModel(CommunicationConfig(uplink_bandwidth_hz=10e6))
+    rate_at_1000_meter = model.compute_rate_bits_per_second(1000.0)
+    assert 33e6 < rate_at_1000_meter < 37e6
+    assert model.compute_rate_bits_per_second(1000.0, shadowing_db=3.0) > rate_at_1000_meter
+    assert model.compute_rate_bits_per_second(1000.0, shadowing_db=-3.0) < rate_at_1000_meter
+    assert model.compute_rate_bits_per_second(100.0) > model.compute_rate_bits_per_second(2000.0)
+
+
+def test_seeded_reset_reproduces_shadowing():
+    first_env = LeaderSynchronizationEnv(SimulationConfig())
+    second_env = LeaderSynchronizationEnv(SimulationConfig())
+    first_env.reset(seed=123)
+    second_env.reset(seed=123)
+    shadowing = first_env.scenario.shadowing_db_matrix
+    assert shadowing.shape == (first_env.simulation_config.system.time_horizon_slots, first_env.simulation_config.system.vehicle_count)
+    assert np.allclose(shadowing, second_env.scenario.shadowing_db_matrix)
+    assert 2.0 < float(np.std(shadowing)) < 4.0
