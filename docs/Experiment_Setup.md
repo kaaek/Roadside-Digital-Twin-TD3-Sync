@@ -34,7 +34,7 @@ Monte Carlo keeps the environment parameters fixed and runs many independent see
 
 ### Sensitivity sweeps
 
-Sensitivity sweeps keep trained models fixed and change one environment parameter at a time. Each parameter value runs a full Monte Carlo evaluation. Current priority sweeps include vehicle count, task size (`data_size_high_multiplier`), sensors per vehicle, accuracy threshold, and sample arrival rate (`sample_arrival_rate`). RL models must be trained with the arrival process enabled to be evaluated at any arrival rate, because the observation then includes a sample-age block.
+Sensitivity sweeps keep trained models fixed and change one environment parameter at a time. Each parameter value runs a full Monte Carlo evaluation. Current priority sweeps include vehicle count, task size (`data_size_high_multiplier`), sensors per vehicle, accuracy threshold, and sample arrival rate (`sample_arrival_rate`). One trained model can be evaluated across all of these sweeps, including vehicle count and arrival rate, because its 7-value action and 80-value observation do not depend on them.
 
 ### Final results pipeline
 

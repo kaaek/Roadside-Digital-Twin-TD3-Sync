@@ -75,7 +75,7 @@ python scripts/train_ppo_until_convergence.py \
 
 ## Sample Arrival Rate
 
-Training uses `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` from `leader_dt/constants.py` (nominal `0.10`). Override it per run with `--sample-arrival-rate <lambda>` on `scripts/train_ppo_until_convergence.py`. Models trained with the arrival process have a 1284-value observation and cannot be evaluated in legacy mode (rate `None`), or the reverse.
+Training uses `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` from `leader_dt/constants.py` (nominal `0.10`). Override it per run with `--sample-arrival-rate <lambda>` on `scripts/train_ppo_until_convergence.py`. The model has a 7-value action (six pair-feature weights plus the requested accuracy) and an 80-value observation for any arrival rate or vehicle count. Checkpoints trained before the feature-weight interface have a different shape and cannot be loaded.
 
 ## Outputs
 

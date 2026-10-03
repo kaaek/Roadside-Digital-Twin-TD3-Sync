@@ -20,8 +20,6 @@ def test_z3_checker_builds_small_report() -> None:
             vehicle_count=2,
             sensors_per_vehicle=1,
             freshness_threshold_slots=4,
-            max_vehicle_count_for_action_space=2,
-            max_sensors_per_vehicle_for_action_space=1,
         ),
         random_seed=1,
     )

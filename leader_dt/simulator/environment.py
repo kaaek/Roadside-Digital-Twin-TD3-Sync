@@ -12,16 +12,19 @@ from leader_dt.models.aoi import AoiTransitionModel
 from leader_dt.models.cpu import CpuBacklogModel
 from leader_dt.models.accuracy import AccuracyModel
 from leader_dt.rl.observation import ObservationBuilder
+from leader_dt.rl.pair_features import PAIR_FEATURE_COUNT, PairFeatureBuilder
 from leader_dt.rl.reward import RewardCalculator
-from leader_dt.simulator.action import ActionDecoder
+from leader_dt.simulator.action import ActionDecoder, PairSchedulingRequest, build_scheduling_action
 from leader_dt.simulator.dynamics import LeaderSynchronizationDynamics
 from leader_dt.simulator.recorder import EpisodeRecord, StepRecord
 
 class LeaderSynchronizationEnv(gym.Env):
     """Vehicle-sensor choice upload scheduling environment.
 
-    Action: pair_count scores + one requested accuracy fraction.
-    Observation: normalized pair-level AoI, feasibility, data size, and global state.
+    Action: one weight per pair feature plus one requested accuracy fraction; the
+    feasible pair with the highest weighted feature score is scheduled.  Heuristic
+    baselines pass a ``PairSchedulingRequest`` to ``step`` instead.
+    Observation: see ``ObservationBuilder``.
     """
 
     metadata = {"render_modes": []}
@@ -33,13 +36,20 @@ class LeaderSynchronizationEnv(gym.Env):
         self.scenario = self.scenario_generator.generate(seed=self.simulation_config.random_seed)
         self.observation_builder = ObservationBuilder(self.simulation_config)
         self.reward_calculator = RewardCalculator(self.simulation_config)
-        self.action_decoder = ActionDecoder(pair_count=self.scenario.pair_count, max_pair_count=self.simulation_config.system.max_pair_count_for_action_space)
+        self.pair_feature_builder = PairFeatureBuilder(self.simulation_config)
+        self.action_decoder = ActionDecoder(feature_count=PAIR_FEATURE_COUNT)
         self.dynamics = self._build_dynamics()
         self.state = None
         self.episode_record = EpisodeRecord()
         self.random_generator = np.random.default_rng(self.simulation_config.random_seed)
-        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.simulation_config.system.max_pair_count_for_action_space + 1,), dtype=np.float32)
+        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.action_decoder.action_dimension,), dtype=np.float32)
         self.observation_space = self.observation_builder.build_observation_space(self.scenario)
+
+    def build_pair_feature_matrix(self) -> np.ndarray:
+        """Per-pair features for the current state (see ``leader_dt/rl/pair_features.py``)."""
+        if self.state is None:
+            raise RuntimeError("Environment state is not initialized.")
+        return self.pair_feature_builder.build(self.dynamics, self.state)
 
     def _build_dynamics(self) -> LeaderSynchronizationDynamics:
         return LeaderSynchronizationDynamics(
@@ -56,26 +66,35 @@ class LeaderSynchronizationEnv(gym.Env):
         effective_seed = seed if seed is not None else self.simulation_config.random_seed
         self.random_generator = np.random.default_rng(effective_seed)
         self.scenario = self.scenario_generator.generate(seed=effective_seed)
-        self.action_decoder = ActionDecoder(pair_count=self.scenario.pair_count, max_pair_count=self.simulation_config.system.max_pair_count_for_action_space)
         self.dynamics = self._build_dynamics()
         self.state = self.dynamics.initialize_state()
         self.episode_record = EpisodeRecord()
-        self.action_space = spaces.Box(low=0.0, high=1.0, shape=(self.simulation_config.system.max_pair_count_for_action_space + 1,), dtype=np.float32)
-        self.observation_space = self.observation_builder.build_observation_space(self.scenario)
         return self._build_observation(), {}
 
-    def step(self, action: np.ndarray):
-        if self.state is None:
-            raise RuntimeError("Environment must be reset before step().")
+    def _decode_action(self, action: np.ndarray | PairSchedulingRequest):
         feasible_pair_indices = self.dynamics.get_feasible_pair_indices(self.state)
-        scheduling_action = self.action_decoder.decode_rl_action(
+        available_data_size_bits_array = self.dynamics.get_available_data_size_bits_array(self.state)
+        uplink_capacity_bits_array = self.dynamics.compute_uplink_capacity_bits_array(self.state)
+        if isinstance(action, PairSchedulingRequest):
+            return build_scheduling_action(
+                action.pair_index,
+                action.requested_accuracy_fraction,
+                feasible_pair_indices,
+                available_data_size_bits_array,
+                uplink_capacity_bits_array,
+            )
+        return self.action_decoder.decode_rl_action(
             raw_action_array=action,
             feasible_pair_indices=feasible_pair_indices,
-            available_data_size_bits_array=self.dynamics.get_available_data_size_bits_array(self.state),
-            uplink_capacity_bits_array=self.dynamics.compute_uplink_capacity_bits_array(self.state),
-            deterministic=True,
-            random_generator=self.random_generator,
+            pair_feature_matrix=self.build_pair_feature_matrix(),
+            available_data_size_bits_array=available_data_size_bits_array,
+            uplink_capacity_bits_array=uplink_capacity_bits_array,
         )
+
+    def step(self, action: np.ndarray | PairSchedulingRequest):
+        if self.state is None:
+            raise RuntimeError("Environment must be reset before step().")
+        scheduling_action = self._decode_action(action)
         next_state, transition_info = self.dynamics.step(self.state, scheduling_action)
         reward = self.reward_calculator.compute_reward(
             state_after_action=next_state,
@@ -118,4 +137,4 @@ class LeaderSynchronizationEnv(gym.Env):
             raise RuntimeError("Environment state is not initialized.")
         feasible_pair_indices = self.dynamics.get_feasible_pair_indices(self.state)
         active_pair_indices = self.dynamics.get_active_pair_indices(self.state)
-        return self.observation_builder.build_observation(self.state, self.scenario, feasible_pair_indices, active_pair_indices)
+        return self.observation_builder.build_observation(self.state, self.scenario, feasible_pair_indices, active_pair_indices, self.build_pair_feature_matrix())

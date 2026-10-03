@@ -26,14 +26,6 @@ def build_config_from_arguments(args: argparse.Namespace) -> SimulationConfig:
         accuracy_threshold=args.accuracy_threshold,
         leader_cpu_frequency_cycles_per_second=args.cpu_frequency,
         include_leader_as_provider=not args.exclude_leader,
-        max_vehicle_count_for_action_space=max(
-            base_config.system.max_vehicle_count_for_action_space,
-            args.vehicle_count,
-        ),
-        max_sensors_per_vehicle_for_action_space=max(
-            base_config.system.max_sensors_per_vehicle_for_action_space,
-            args.sensors_per_vehicle,
-        ),
     )
     road_config = replace(
         base_config.road,

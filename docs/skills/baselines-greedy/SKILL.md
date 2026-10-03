@@ -36,4 +36,6 @@ slot_CPU_capacity = leader_cpu_frequency_cycles_per_second * slot_duration_secon
 
 ## Current Baseline Policy
 
+Baselines return a `PairSchedulingRequest` (pair index and requested accuracy) rather than an RL action vector.
+
 Greedy is the main baseline in final plots. `Random` and `No refresh` are diagnostic/legacy only and should not be included in final paper plots unless explicitly requested.

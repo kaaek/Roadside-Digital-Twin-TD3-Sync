@@ -13,6 +13,7 @@ import numpy as np
 
 from leader_dt import constants
 from leader_dt.domain.sensor_pairs import SensorVehiclePair
+from leader_dt.simulator.action import PairSchedulingRequest
 from leader_dt.simulator.environment import LeaderSynchronizationEnv
 
 
@@ -183,17 +184,15 @@ class GreedyWeightedAoiPolicy(_EpisodeSupplierBlacklistMixin):
         self.requested_accuracy_fraction = float(np.clip(requested_accuracy_fraction, 0.0, 1.0))
         self._initialize_supplier_blacklist()
 
-    def select_action(self, environment: LeaderSynchronizationEnv) -> np.ndarray:
-        """Return the CPU-aware Greedy action for the current environment state."""
+    def select_action(self, environment: LeaderSynchronizationEnv) -> PairSchedulingRequest:
+        """Return the CPU-aware Greedy decision for the current environment state."""
         self._prepare_episode_state(environment)
 
         feasible_pair_indices = environment.dynamics.get_feasible_pair_indices(environment.state)
         eligible_pair_indices = self._filter_blacklisted_pairs(environment, feasible_pair_indices)
-        action = np.zeros(environment.action_space.shape, dtype=np.float32)
-        action[-1] = np.float32(self.requested_accuracy_fraction)
 
         if not eligible_pair_indices or self.requested_accuracy_fraction <= 0.0:
-            return action
+            return self._fallback_request(feasible_pair_indices)
 
         shared_arrays = self._build_shared_scoring_arrays(environment)
         scores = np.full(environment.scenario.pair_count, -np.inf, dtype=np.float64)
@@ -215,8 +214,17 @@ class GreedyWeightedAoiPolicy(_EpisodeSupplierBlacklistMixin):
             uplink_rate_bits_per_second_array=shared_arrays["uplink_rate_bits_per_second_array"],
             cpu_cycles_per_bit_array=shared_arrays["cpu_cycles_per_bit_array"],
         )
-        action[selected_pair_index] = 1.0
-        return action
+        return PairSchedulingRequest(selected_pair_index, self.requested_accuracy_fraction)
+
+    def _fallback_request(self, feasible_pair_indices: list[int]) -> PairSchedulingRequest:
+        """Decision when no eligible pair remains.
+
+        Matches the earlier one-hot action encoding, whose all-zero pair scores
+        made the decoder schedule the first feasible pair even if blacklisted.
+        """
+        if not feasible_pair_indices or self.requested_accuracy_fraction <= 0.0:
+            return PairSchedulingRequest(None, self.requested_accuracy_fraction)
+        return PairSchedulingRequest(int(feasible_pair_indices[0]), self.requested_accuracy_fraction)
 
     def _build_shared_scoring_arrays(self, environment: LeaderSynchronizationEnv) -> dict[str, np.ndarray | float]:
         uplink_rate_bits_per_second_array = environment.dynamics.compute_uplink_rate_array_by_pair(environment.state)
@@ -303,17 +311,15 @@ class ProximityGreedyPolicy(GreedyWeightedAoiPolicy):
     vehicle.
     """
 
-    def select_action(self, environment: LeaderSynchronizationEnv) -> np.ndarray:
-        """Return the proximity-based Greedy action for the current state."""
+    def select_action(self, environment: LeaderSynchronizationEnv) -> PairSchedulingRequest:
+        """Return the proximity-based Greedy decision for the current state."""
         self._prepare_episode_state(environment)
 
         feasible_pair_indices = environment.dynamics.get_feasible_pair_indices(environment.state)
         eligible_pair_indices = self._filter_blacklisted_pairs(environment, feasible_pair_indices)
-        action = np.zeros(environment.action_space.shape, dtype=np.float32)
-        action[-1] = np.float32(self.requested_accuracy_fraction)
 
         if not eligible_pair_indices or self.requested_accuracy_fraction <= 0.0:
-            return action
+            return self._fallback_request(feasible_pair_indices)
 
         distance_array_by_pair = environment.dynamics.compute_distance_array_by_pair(environment.state)
         eligible_pairs = [environment.scenario.sensor_pair_index.get_pair(index) for index in eligible_pair_indices]
@@ -352,26 +358,22 @@ class ProximityGreedyPolicy(GreedyWeightedAoiPolicy):
             uplink_rate_bits_per_second_array=shared_arrays["uplink_rate_bits_per_second_array"],
             cpu_cycles_per_bit_array=shared_arrays["cpu_cycles_per_bit_array"],
         )
-        action[selected_pair_index] = 1.0
-        return action
+        return PairSchedulingRequest(selected_pair_index, self.requested_accuracy_fraction)
 
 
 class GreedyMaxAoiPolicy:
     """Select feasible pair with largest sensor-type AoI and request full data."""
 
-    def select_action(self, environment: LeaderSynchronizationEnv) -> np.ndarray:
-        """Return the max-AoI Greedy action for the current environment state."""
+    def select_action(self, environment: LeaderSynchronizationEnv) -> PairSchedulingRequest:
+        """Return the max-AoI Greedy decision for the current environment state."""
         if environment.state is None:
             raise RuntimeError("Environment must be reset before selecting an action.")
         feasible = environment.dynamics.get_feasible_pair_indices(environment.state)
-        action = np.zeros(environment.action_space.shape, dtype=np.float32)
         if not feasible:
-            return action
+            return PairSchedulingRequest(None, 0.0)
         sensor_type_aoi = environment.state.sensor_type_aoi_slots_array
         scores = np.zeros(environment.scenario.pair_count, dtype=np.float64)
         for pair in environment.scenario.sensor_pair_index.pairs:
             scores[int(pair.pair_id)] = sensor_type_aoi[int(pair.sensor_type_id)]
         selected_pair = int(feasible[int(np.argmax(scores[feasible]))])
-        action[selected_pair] = 1.0
-        action[-1] = 1.0
-        return action
+        return PairSchedulingRequest(selected_pair, 1.0)

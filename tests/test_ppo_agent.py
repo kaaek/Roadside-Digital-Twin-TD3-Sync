@@ -21,8 +21,6 @@ def tiny_simulation_config(seed: int = 1) -> SimulationConfig:
             vehicle_count=4,
             sensor_type_count=4,
             sensors_per_vehicle=2,
-            max_vehicle_count_for_action_space=4,
-            max_sensors_per_vehicle_for_action_space=2,
         ),
     )
 
@@ -39,7 +37,7 @@ def test_ppo_model_builds() -> None:
     trainer = PpoTrainer(simulation_config, training_config)
     model = trainer.build_model()
     assert model is not None
-    assert model.action_space.shape == (simulation_config.system.max_pair_count_for_action_space + 1,)
+    assert model.action_space.shape == LeaderSynchronizationEnv(simulation_config).action_space.shape
 
 
 def test_ppo_wrapper_returns_valid_action_shape() -> None:

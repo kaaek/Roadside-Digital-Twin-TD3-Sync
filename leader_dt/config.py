@@ -15,12 +15,6 @@ class SystemConfig:
     accuracy_threshold: float = constants.DEFAULT_ACCURACY_THRESHOLD
     leader_cpu_frequency_cycles_per_second: float = constants.DEFAULT_LEADER_CPU_FREQUENCY_CYCLES_PER_SECOND
     include_leader_as_provider: bool = False
-    max_vehicle_count_for_action_space: int = constants.DEFAULT_MAX_VEHICLE_COUNT_FOR_ACTION_SPACE
-    max_sensors_per_vehicle_for_action_space: int = constants.DEFAULT_MAX_SENSORS_PER_VEHICLE_FOR_ACTION_SPACE
-
-    @property
-    def max_pair_count_for_action_space(self) -> int:
-        return self.max_vehicle_count_for_action_space * self.max_sensors_per_vehicle_for_action_space
 
 @dataclass(frozen=True)
 class CommunicationConfig:
@@ -43,10 +37,6 @@ class DataGenerationConfig:
     low_multiplier: float = constants.DEFAULT_DATA_SIZE_LOW_MULTIPLIER
     high_multiplier: float = constants.DEFAULT_DATA_SIZE_HIGH_MULTIPLIER
     sample_arrival_rate_per_slot: float | None = constants.DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT
-
-    @property
-    def has_sample_arrival_process(self) -> bool:
-        return self.sample_arrival_rate_per_slot is not None
 
 @dataclass(frozen=True)
 class SimulationConfig:

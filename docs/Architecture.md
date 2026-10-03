@@ -18,7 +18,7 @@ The core state lives in the environment and simulator state objects. It changes 
 
 ### Scenario generation
 
-`leader_dt/domain/scenario.py` and related domain modules generate vehicles, sensor ownership, provider-sensor pairs, per-slot sample sizes, Poisson sample-arrival counts, and mobility-related conditions. This is where stochastic scenario information is created from controlled random seeds. Arrival counts are drawn after sample sizes, so a given seed produces the same sizes for every arrival rate. With the arrival rate set to `None`, every pair receives a sample in every slot (the legacy model).
+`leader_dt/domain/scenario.py` and related domain modules generate vehicles, sensor ownership, provider-sensor pairs, per-slot sample sizes, Poisson sample-arrival counts, and mobility-related conditions. This is where stochastic scenario information is created from controlled random seeds. Arrival counts are drawn after sample sizes, so a given seed produces the same sizes for every arrival rate. With the arrival rate set to `None`, every pair receives a sample in every slot.
 
 ### Simulator environment
 
@@ -26,7 +26,7 @@ The core state lives in the environment and simulator state objects. It changes 
 
 ### Action decoding
 
-`leader_dt/simulator/action.py` converts RL action vectors into physical scheduling decisions. The action contains one score for every padded provider pair plus one requested accuracy fraction. During evaluation, decoding should select the feasible pair with the highest score deterministically.
+`leader_dt/simulator/action.py` converts decisions into physical scheduling actions. `ActionDecoder` maps the 7-value RL action to six feature weights in $[-1, 1]$ plus a requested accuracy, scores every feasible pair with the shared features from `leader_dt/rl/pair_features.py`, and schedules the highest-scoring pair. Heuristic baselines skip the decoder by returning a `PairSchedulingRequest` (pair index and accuracy), which the environment accepts directly. Decoding is deterministic.
 
 ### Dynamics and state transition
 
@@ -34,7 +34,7 @@ The core state lives in the environment and simulator state objects. It changes 
 
 ### Observation and reward
 
-`leader_dt/rl/observation.py` builds the normalized observation vector consumed by TD3/PPO: per-pair AoI, feasibility, pending sample size and (when the arrival process is enabled) pending sample age, plus four global features. `leader_dt/rl/reward.py` computes a smooth shaped reward from normalized weighted AoI, squared freshness and accuracy slack, a log1p CPU-backlog term, a terminal CPU term, and an accuracy bonus. Reported evaluation metrics stay count-based.
+`leader_dt/rl/pair_features.py` computes six per-pair features (weighted urgency, reachable accuracy, proximity, CPU cost, sample age, dwell time). `leader_dt/rl/observation.py` builds the 80-value normalized observation consumed by TD3/PPO: per-sensor-type summaries, the mean and max of each pair feature over feasible pairs, and four global features. Neither the action nor the observation depends on the vehicle count. `leader_dt/rl/reward.py` computes a smooth shaped reward from normalized weighted AoI, squared freshness and accuracy slack, a log1p CPU-backlog term, a terminal CPU term, and an accuracy bonus. Reported evaluation metrics stay count-based.
 
 ### TD3 and PPO trainers
 

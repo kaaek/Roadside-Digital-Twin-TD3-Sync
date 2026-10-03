@@ -35,15 +35,15 @@ PPO_MODEL="results/convergence_ppo/models/best_ppo.zip"
   --ppo-model-path "$PPO_MODEL" \
   --output-dir results/sweeps/sensitivity_vehicle_count
 
-# # echo "=== 4/5 Data-size-high-multiplier sensitivity sweep ==="
-# .venv/bin/python scripts/run_sensitivity.py \
-#   --parameter data_size_high_multiplier \
-#   --values 1.0,1.2,1.5,2.0,3.0,4.0 \
-#   --trials 500 \
-#   --seed-start 50000 \
-#   --td3-model-path "$TD3_MODEL" \
-#   --ppo-model-path "$PPO_MODEL" \
-#   --output-dir results/sweeps/sensitivity_data_size_high_multiplier
+# echo "=== 4/5 Data-size-high-multiplier sensitivity sweep ==="
+.venv/bin/python scripts/run_sensitivity.py \
+  --parameter data_size_high_multiplier \
+  --values 1.0,1.2,1.5,2.0,3.0,4.0 \
+  --trials 500 \
+  --seed-start 50000 \
+  --td3-model-path "$TD3_MODEL" \
+  --ppo-model-path "$PPO_MODEL" \
+  --output-dir results/sweeps/sensitivity_data_size_high_multiplier
 
 # # echo "=== 5/5 Sensor-type scalability: train per point ==="
 # .venv/bin/python scripts/run_sensor_type_scalability.py \

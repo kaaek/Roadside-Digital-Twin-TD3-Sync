@@ -3,19 +3,20 @@ from dataclasses import replace
 
 from leader_dt.config import SimulationConfig
 from leader_dt.simulator.environment import LeaderSynchronizationEnv
-from leader_dt.baselines.greedy import GreedyWeightedAoiPolicy
+from leader_dt.baselines.greedy import GreedyMaxAoiPolicy, GreedyWeightedAoiPolicy, ProximityGreedyPolicy
 from leader_dt.evaluation.rollout import RolloutRunner
 from leader_dt.models.aoi import AoiTransitionModel
 from leader_dt.models.cpu import CpuBacklogModel
 from leader_dt.models.accuracy import AccuracyModel
-from leader_dt.simulator.action import ActionDecoder
+from leader_dt.rl.pair_features import PAIR_FEATURE_COUNT, PAIR_FEATURE_NAMES
+from leader_dt.simulator.action import ActionDecoder, PairSchedulingRequest
 
 
 def test_environment_reset_shapes():
     env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
     obs, _ = env.reset(seed=1)
     assert obs.shape == env.observation_space.shape
-    assert env.action_space.shape == (env.simulation_config.system.max_pair_count_for_action_space + 1,)
+    assert env.action_space.shape == (PAIR_FEATURE_COUNT + 1,)
 
 
 def test_environment_random_step_runs():
@@ -82,27 +83,12 @@ def test_accuracy_calculation():
     assert not model.satisfies_accuracy(79.0, 100.0)
 
 
-def test_action_decoder_returns_valid_pair():
-    decoder = ActionDecoder(pair_count=3, max_pair_count=5)
-    action = np.zeros(6, dtype=np.float32)
-    action[1] = 1.0
-    action[-1] = 0.8
-    scheduling_action = decoder.decode_rl_action(
-        raw_action_array=action,
-        feasible_pair_indices=[0, 1, 2],
-        available_data_size_bits_array=np.array([100.0, 200.0, 300.0]),
-        uplink_capacity_bits_array=np.array([100.0, 100.0, 100.0]),
-        deterministic=True,
-    )
-    assert scheduling_action.scheduled_pair_index == 1
-    assert scheduling_action.collected_bits_float == 100.0
-
-
-def test_greedy_policy_action_shape():
+def test_greedy_policy_returns_feasible_request():
     env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
     env.reset(seed=1)
-    action = GreedyWeightedAoiPolicy().select_action(env)
-    assert action.shape == env.action_space.shape
+    request = GreedyWeightedAoiPolicy().select_action(env)
+    assert isinstance(request, PairSchedulingRequest)
+    assert request.pair_index in env.dynamics.get_feasible_pair_indices(env.state)
 
 
 def test_rollout_metrics():
@@ -167,15 +153,12 @@ def test_upload_consumes_pending_sample_and_ages_aoi():
         aged_pairs = [index for index in env.dynamics.get_feasible_pair_indices(env.state) if ages[index] >= 1.0]
         if aged_pairs:
             break
-        env.step(np.zeros(env.action_space.shape, dtype=np.float32))
+        env.step(PairSchedulingRequest(None, 0.0))
     assert aged_pairs
     pair_index = aged_pairs[0]
     sample_age = float(ages[pair_index])
-    action = np.zeros(env.action_space.shape, dtype=np.float32)
-    action[pair_index] = 1.0
-    action[-1] = 1.0
     arrives_next_slot = env.scenario.sample_arrival_count_matrix[env.state.time_slot_index + 1, pair_index] > 0
-    _, _, _, _, info = env.step(action)
+    _, _, _, _, info = env.step(PairSchedulingRequest(pair_index, 1.0))
     assert info["sample_age_slots_float"] == sample_age
     if not arrives_next_slot:
         assert env.dynamics.get_available_data_size_bits_array(env.state)[pair_index] == 0.0
@@ -184,18 +167,61 @@ def test_upload_consumes_pending_sample_and_ages_aoi():
         assert env.state.sensor_type_aoi_slots_array[sensor_type_index] >= sample_age
 
 
-def test_arrival_process_adds_sample_age_observation_block():
-    legacy_env = LeaderSynchronizationEnv(_config_with_arrival_rate(None))
-    arrival_env = LeaderSynchronizationEnv(_config_with_arrival_rate(0.5))
-    max_pair_count = legacy_env.simulation_config.system.max_pair_count_for_action_space
-    assert arrival_env.observation_space.shape[0] == legacy_env.observation_space.shape[0] + max_pair_count
-    obs, _ = arrival_env.reset(seed=1)
-    assert obs.shape == arrival_env.observation_space.shape
-
-
 def test_large_arrival_rate_matches_legacy_feasibility():
     legacy_env = LeaderSynchronizationEnv(_config_with_arrival_rate(None))
     dense_env = LeaderSynchronizationEnv(_config_with_arrival_rate(50.0))
     legacy_env.reset(seed=1)
     dense_env.reset(seed=1)
     assert legacy_env.dynamics.get_feasible_pair_indices(legacy_env.state) == dense_env.dynamics.get_feasible_pair_indices(dense_env.state)
+
+
+def test_action_decoder_picks_highest_weighted_feature_score():
+    decoder = ActionDecoder(feature_count=2)
+    pair_feature_matrix = np.array([[1.0, 0.0], [0.0, 1.0], [0.5, 0.5]])
+    # Weight action 0.0 -> w = -1, 1.0 -> w = +1: prefer feature 1, avoid feature 0.
+    scheduling_action = decoder.decode_rl_action(
+        raw_action_array=np.array([0.0, 1.0, 1.0]),
+        feasible_pair_indices=[0, 1, 2],
+        pair_feature_matrix=pair_feature_matrix,
+        available_data_size_bits_array=np.array([100.0, 200.0, 300.0]),
+        uplink_capacity_bits_array=np.array([500.0, 150.0, 500.0]),
+    )
+    assert scheduling_action.scheduled_pair_index == 1
+    assert scheduling_action.collected_bits_float == 150.0
+    # Infeasible pairs are never chosen, even with the best score.
+    scheduling_action = decoder.decode_rl_action(
+        raw_action_array=np.array([0.0, 1.0, 1.0]),
+        feasible_pair_indices=[0, 2],
+        pair_feature_matrix=pair_feature_matrix,
+        available_data_size_bits_array=np.array([100.0, 200.0, 300.0]),
+        uplink_capacity_bits_array=np.array([500.0, 150.0, 500.0]),
+    )
+    assert scheduling_action.scheduled_pair_index == 2
+
+
+def test_observation_is_compact_and_vehicle_count_independent():
+    shapes = set()
+    for vehicle_count in (10, 40, 80):
+        config = SimulationConfig(random_seed=1)
+        config = replace(config, system=replace(config.system, vehicle_count=vehicle_count))
+        env = LeaderSynchronizationEnv(config)
+        obs, _ = env.reset(seed=1)
+        assert obs.shape == env.observation_space.shape
+        assert np.all((obs >= 0.0) & (obs <= 1.0))
+        shapes.add(obs.shape)
+    assert shapes == {(80,)}
+
+
+def test_pair_features_are_bounded_and_reachable_accuracy_matches_capacity():
+    env = LeaderSynchronizationEnv(SimulationConfig(random_seed=1))
+    env.reset(seed=1)
+    features = env.build_pair_feature_matrix()
+    assert features.shape == (env.scenario.pair_count, PAIR_FEATURE_COUNT)
+    assert np.all(features >= 0.0) and np.all(features <= 3.0)
+    sizes = env.dynamics.get_available_data_size_bits_array(env.state)
+    capacity = env.dynamics.compute_uplink_capacity_bits_array(env.state)
+    column = PAIR_FEATURE_NAMES.index("reachable_accuracy")
+    with_sample = sizes > 0.0
+    assert np.allclose(features[with_sample, column], np.minimum(1.0, capacity[with_sample] / sizes[with_sample]))
+    assert np.all(features[~with_sample, column] == 0.0)
+

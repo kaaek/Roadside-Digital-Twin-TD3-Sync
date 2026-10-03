@@ -1,4 +1,4 @@
-"""Shared thesis-quality Matplotlib styling."""
+"""Shared academic-quality Matplotlib styling."""
 from __future__ import annotations
 
 import os
@@ -25,7 +25,7 @@ COLORBLIND_FRIENDLY_COLORS = [
 ]
 
 
-def thesis_figure_size(
+def academic_figure_size(
     width: Literal["full", "column"] = "full",
     aspect_ratio: float = THESIS_ASPECT_RATIO,
 ) -> tuple[float, float]:
@@ -34,7 +34,7 @@ def thesis_figure_size(
     return figure_width, figure_width * aspect_ratio
 
 
-def apply_thesis_plot_style() -> None:
+def apply_academic_plot_style() -> None:
     """Apply the mandatory project thesis plotting style.
 
     Sensitivity sweeps always call this function before plotting.  SciencePlots

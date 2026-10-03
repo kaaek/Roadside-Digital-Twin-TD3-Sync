@@ -16,18 +16,20 @@ Refer to this document when modifying the environment, action decoder, dynamics,
 - `leader_dt/domain/scenario.py`
 - `leader_dt/domain/sensor_pairs.py`
 - `leader_dt/rl/observation.py`
+- `leader_dt/rl/pair_features.py`
 - `leader_dt/rl/reward.py`
 
 ## Core Invariants
 
-- RL scores provider pairs, not sensor types alone.
+- RL schedules provider pairs, not sensor types alone. The actor outputs one weight per pair feature (`leader_dt/rl/pair_features.py`) plus the requested accuracy; every feasible pair is scored with the same weights. Keep features normalized and computed identically for every pair, and never give the actor per-slot outputs: slot identities change every episode.
+- Heuristic baselines return `PairSchedulingRequest`, never RL action vectors.
 - Sensor-type AoI/freshness is the main Digital Twin objective.
 - Pair-level constraints handle data, communication, CPU, and accuracy.
 - One pair is scheduled per slot.
 - A pair is feasible only if its carrier is in Zone B and it holds a pending sample. Read data sizes through `LeaderSynchronizationDynamics.get_available_data_size_bits_array`, not `scenario.available_data_size_bits_matrix`, which holds sizes of samples at arrival time.
 - Each pair keeps only its latest unsent sample; an upload consumes it. On a successful refresh, AoI = sample age + sensing delay + transmission delay.
-- With `sample_arrival_rate_per_slot=None` the simulator must reproduce the legacy model (fresh sample every slot) exactly; arrival counts are drawn after sample sizes to keep the legacy random stream.
-- Stable action and observation shapes must be preserved across sweeps. The observation has a sample-age block only when the arrival process is enabled (1284 vs. 964 values), so do not mix legacy and arrival-mode models.
+- With `sample_arrival_rate_per_slot=None` every pair has a fresh sample in every slot. Arrival counts are drawn after sample sizes, so a seed produces the same sizes at every arrival rate.
+- Stable action and observation shapes must be preserved across sweeps: a 7-value action and an 80-value observation for any vehicle count, sensor-type count (up to 16), or arrival rate. Adding a pair feature changes both shapes and requires retraining.
 - Evaluation should use deterministic action decoding.
 
 ## Unit Conventions

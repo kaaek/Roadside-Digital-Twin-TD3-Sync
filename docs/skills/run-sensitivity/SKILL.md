@@ -80,7 +80,7 @@ python scripts/run_sensitivity.py \
 
 ## Sample Arrival Rate Sweep
 
-`sample_arrival_rate` is the Poisson rate of new samples per vehicle-sensor pair per slot (nominal `0.10`). TD3/PPO models must have been trained with the arrival process enabled; legacy-mode models have a smaller observation and will not load.
+`sample_arrival_rate` is the Poisson rate of new samples per vehicle-sensor pair per slot (nominal `0.10`). A trained model can be evaluated at any rate.
 
 ```bash
 python scripts/run_sensitivity.py \

@@ -83,13 +83,7 @@ $$
 20 \times 4 = 80
 $$
 
-However, the reinforcement learning interface is padded to support larger vehicle-count experiments. The maximum configured action-space capacity supports:
-
-$$
-80 \times 4 = 320
-$$
-
-possible provider-sensor pair entries. This is why the current RL action space is based on 320 padded pair scores, even though the nominal scenario contains only 80 actual pairs.
+The reinforcement learning interface does not depend on the number of pairs (Section 5), so the same trained network can be evaluated at any vehicle count.
 
 ---
 
@@ -131,7 +125,7 @@ $$
 
 With the nominal $\lambda = 0.10$, each pair produces a new sample in about 9.5% of slots, roughly one every 10 seconds. Across the 80 nominal pairs, a few new samples still appear in the zone every slot, but a particular sensor on a particular vehicle usually has nothing new to offer. This makes data availability, not only geometry, a scheduling constraint. Waiting is also costly, because a pending sample keeps ageing until it is uploaded.
 
-Each sample's size $\delta_i(t)$ is drawn uniformly between 0.3× and 6.3× its sensor type's nominal payload. Arrivals and sizes are pre-generated per episode from the scenario seed. Setting the rate to `None` restores the legacy model in which every pair has a fresh sample in every slot.
+Each sample's size $\delta_i(t)$ is drawn uniformly between 0.3× and 6.3× its sensor type's nominal payload. Arrivals and sizes are pre-generated per episode from the scenario seed. Setting the rate to `None` gives every pair a fresh sample in every slot (no arrival process).
 
 The rate is set by `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` in `leader_dt/constants.py`, by `--sample-arrival-rate` on the convergence training scripts, or swept with the `sample_arrival_rate` sensitivity parameter.
 
@@ -216,12 +210,7 @@ The state includes:
 * Recent CPU usage.
 * Accuracy and freshness status.
 
-At each step, the simulator receives an action from a policy. The action contains:
-
-1. A score for each padded provider-sensor pair.
-2. A requested accuracy fraction.
-
-The simulator filters infeasible pairs and selects the feasible pair with the highest action score. It then computes how many bits can be collected from that pair, whether the accuracy threshold is met, and whether the corresponding sensor-type AoI should be refreshed.
+At each step, the simulator receives a decision from a policy. TD3 and PPO send an action vector (Section 5.2); heuristic baselines name a pair directly with a `PairSchedulingRequest` (pair index and requested accuracy). Either way, the simulator ends up with one feasible pair or an idle slot. It then computes how many bits can be collected from that pair, whether the accuracy threshold is met, and whether the corresponding sensor-type AoI should be refreshed.
 
 If a sensor type is successfully refreshed, its AoI resets to the age of the uploaded sample plus the update delay:
 
@@ -241,47 +230,44 @@ The output of each step is then used to compute both: the training reward used b
 
 The project formulates leader-assisted Digital Twin synchronization as a continuous-control reinforcement learning problem.
 
-### 5.1 Observation
+Section 9.1 explains why the policy weights pair features instead of scoring each pair slot directly.
 
-TD3 and PPO receive a normalized observation vector. In the current padded formulation, the nominal observation dimension is:
+### 5.1 Pair Features
 
-$$
-4 \times 320 + 4 = 1284
-$$
+Every vehicle-sensor pair $i$ is described by the same six features, computed in `leader_dt/rl/pair_features.py`:
 
-The observation contains four pair-level feature blocks and four global features. In legacy mode (sample arrival rate `None`) the sample-age block is omitted and the dimension is $3 \times 320 + 4 = 964$. Models trained in one mode cannot be loaded in the other, but a model trained at one arrival rate can be evaluated at another.
+| Feature | Definition |
+|---|---|
+| Weighted urgency | $w_s A_s(t) / (\max_s w_s \cdot \tau)$, clipped to $[0, 3]$ |
+| Reachable accuracy | $\min(1, \text{uplink capacity}_i / \text{pending sample size}_i)$; 0 without a sample |
+| Proximity | $1 - d_i / \text{zone length}$ |
+| CPU cost | cycles needed for the collectable bits / per-slot CPU capacity, clipped to $[0, 3]$ |
+| Sample age | pending sample age $/ \tau$, clipped to $[0, 1]$ |
+| Dwell | time until the carrier leaves Zone B / horizon duration |
 
-The pair-level information includes:
-
-1. Freshness-related information for candidate pairs.
-2. Feasibility or availability indicators.
-3. Size of each pair's pending sample (zero if it has none).
-4. Age of each pair's pending sample.
-
-The global information includes episode-level quantities such as:
-
-* CPU backlog.
-* Time progress.
-* Recent CPU pressure.
-* Freshness urgency indicators.
-
-The reason for padding is practical: it allows the same neural network input/output shape to be used across experiments with different vehicle counts, as long as the number of pairs does not exceed the configured maximum.
+Here $w_s$ is the priority weight of the pair's sensor type, $A_s(t)$ its AoI, and $\tau$ the freshness threshold.
 
 ### 5.2 Action
 
-The current action dimension is:
+The action has 7 values in $[0, 1]$: six feature weights and the requested accuracy fraction. Each weight action $a_k$ is mapped to $\omega_k = 2a_k - 1 \in [-1, 1]$. Every feasible pair is scored with the same weights,
 
 $$
-320 + 1 = 321
+\text{score}_i = \sum_{k=1}^{6} \omega_k f_k(i),
 $$
 
-The first 320 values are pair-selection scores. These are not direct binary decisions. They are continuous preferences over candidate provider-sensor pairs. The final value is the requested accuracy fraction.
+and the highest-scoring feasible pair is scheduled with the requested accuracy.
 
-The simulator converts the continuous action into a valid scheduling decision by removing infeasible pairs, ranking the remaining pairs by the policy’s scores, selecting the highest-scored feasible pair, and applying the requested accuracy fraction to determine how much data to attempt to collect.
+TD3 and PPO therefore learn a state-dependent scheduling rule: at every slot they choose how much to value urgency, link quality, distance, CPU cost, sample age, and remaining dwell time. The action size does not depend on the number of vehicles, and the Greedy baselines are approximately special cases (Proximity Greedy weights proximity; CPU-aware Greedy weights urgency against CPU cost), so the learned policy can represent them and adapt beyond them.
 
-This means TD3 and PPO are not directly optimizing a closed-form formula at execution time. They learn a scoring behavior from repeated interaction with the simulator.
+### 5.3 Observation
 
-### 5.3 Reward
+TD3 and PPO receive an 80-value normalized observation that does not depend on the vehicle count:
+
+* Per sensor type, padded to 16 types: AoI, priority weight, whether any feasible pair provides that type, and the best reachable accuracy among those providers (64 values).
+* The mean and maximum of each pair feature over feasible pairs (12 values).
+* Four global values: CPU backlog, time progress, recent CPU load, and the fraction of active sensor types near the freshness threshold.
+
+### 5.4 Reward
 
 The reward combines several operational objectives:
 
@@ -374,7 +360,7 @@ The sensor-type scalability experiment varies the number of active sensor types 
 
 ### 8.5 Sample-Arrival-Rate Sensitivity
 
-This experiment varies the sample arrival rate $\lambda$ (parameter `sample_arrival_rate`). Lower rates make data scarce. Policies can then no longer assume that the nearest vehicle has the sensor they want, and must weigh distance against sample availability and sample age. TD3 and PPO must be trained with the arrival process enabled to be evaluated in this sweep.
+This experiment varies the sample arrival rate $\lambda$ (parameter `sample_arrival_rate`). Lower rates make data scarce. Policies can then no longer assume that the nearest vehicle has the sensor they want, and must weigh distance against sample availability and sample age. A model trained at one arrival rate can be evaluated at any other, since the observation and action do not depend on it.
 
 ---
 
@@ -386,17 +372,49 @@ The main reason is that distance is a dominant physical factor. Since the uplink
 
 Therefore, Proximity Greedy outperforming TD3 or PPO does not automatically indicate a bug. It may indicate that the dominant scheduling factor in the current environment is geometric proximity.
 
-This advantage depends on data being abundant. Under the legacy model, every in-zone pair had fresh data in every slot, so the nearest vehicle always offered the sensor Proximity Greedy wanted. The sample arrival process was introduced to test this. A preliminary baseline-only check (20 seeds, before retraining TD3/PPO) gave the following average weighted AoI:
+This advantage depends on data being abundant. Without an arrival process, every in-zone pair has fresh data in every slot, so the nearest vehicle always offered the sensor Proximity Greedy wanted. The sample arrival process was introduced to test this. A preliminary baseline-only check (20 seeds, before retraining TD3/PPO) gave the following average weighted AoI:
 
 | Arrival rate $\lambda$ | CPU-aware Greedy | Proximity Greedy | Max-AoI Greedy |
 |---|---|---|---|
-| Legacy (every slot) | 7.15 | **5.74** | 7.30 |
+| `None` (fresh sample every slot) | 7.15 | **5.74** | 7.30 |
 | 1.0 | 7.38 | **6.14** | 7.34 |
 | 0.3 | 7.91 | **7.29** | 7.48 |
 | 0.1 | 8.41 | 8.81 | **8.00** |
 | 0.05 | 9.11 | 9.18 | **8.85** |
 
-Proximity Greedy's AoI lead shrinks as samples become scarcer and disappears around $\lambda = 0.1$. Its training-reward return also degrades sharply, from about −291 in legacy mode to −911 at $\lambda = 0.05$. Whether TD3 and PPO overtake the heuristics at the nominal rate still has to be confirmed by retraining and Monte Carlo evaluation.
+Proximity Greedy's AoI lead shrinks as samples become scarcer and disappears around $\lambda = 0.1$. Its training-reward return also degrades sharply, from about −291 without an arrival process to −911 at $\lambda = 0.05$. Section 9.1 shows how TD3 and PPO compare at the nominal rate.
+
+---
+
+### 9.1 Why the Policy Weights Pair Features
+
+An earlier version of the RL interface had the actor output one score per pair slot (320 padded slots plus the accuracy), with an observation of per-slot AoI, feasibility, sample size and sample age. Models trained that way reached an average weighted AoI of about 10.9 at every vehicle count, against 8.6–9.5 for the Greedy baselines, and their training curves stopped improving after about 100k steps. A diagnosis on 30 evaluation seeds (20 vehicles, $\lambda = 0.10$, `scripts/diagnose_policy.py`) showed why:
+
+| Policy | AoI | Failed uploads | Distance rank of the pick (0 = closest, 0.5 = random) |
+|---|---|---|---|
+| Proximity Greedy | 8.87 | 0% | 0.01 |
+| CPU-aware Greedy | 8.73 | 36% | 0.57 |
+| TD3 (per-slot scores) | 10.91 | 24% | 0.49 |
+| PPO (per-slot scores) | 11.00 | 25% | 0.49 |
+| Random feasible pair, full accuracy | 12.02 | – | 0.50 |
+
+The RL policies had learned to request full accuracy, but chose pairs essentially at random with respect to distance, so a quarter of their uploads went over links too weak to deliver 80% of the sample. Two design problems caused this:
+
+1. The observation contained no distance, link capacity, reachable accuracy, priority weight, or CPU cost, which are exactly the quantities the heuristics use.
+2. Pair slot $i$ is a different (vehicle, sensor) combination in every episode, so an unshared network had to learn the same scoring rule separately for each of 320 output slots.
+
+Weighting shared pair features addresses both: the features carry the missing information, and one weight vector is applied to every pair. As a check of what this action space can express, a fixed weight vector with no learning (weighted urgency + reachable accuracy − 0.3 × CPU cost − 0.3 × sample age, full accuracy) reaches an AoI of 5.78 with 1% failed uploads on the same seeds, well below both Greedy baselines.
+
+A first short training check (200k steps each, models trained at 20 vehicles, evaluated on the same 30 seeds) shows the learned policies beating both heuristics:
+
+| Policy | AoI, 20 vehicles | Failed uploads | AoI, 80 vehicles | Failed uploads |
+|---|---|---|---|---|
+| CPU-aware Greedy | 8.73 | 36% | 9.33 | 42% |
+| Proximity Greedy | 8.87 | 0% | 8.60 | 0% |
+| TD3 | 8.44 | 3% | 6.17 | 0% |
+| PPO | 7.83 | 2% | 6.11 | 0% |
+
+These are preliminary. The fixed-weight result of 5.78 suggests there is still room for improvement with full-length training, and the final comparison should come from the Monte Carlo and sensitivity runs.
 
 ---
 

@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from leader_dt.evaluation.sensitivity import SensitivityPointResult
-from leader_dt.plotting.thesis_style import apply_thesis_plot_style, thesis_figure_size
+from leader_dt.plotting.academic_style import apply_academic_plot_style, academic_figure_size
 
 
 POLICY_STYLE_DICTIONARY = {
@@ -73,17 +73,17 @@ def plot_sensitivity_curves(
     xlabel: str | None = None,
     ylabel: str | None = None,
 ) -> Path:
-    """Plot thesis-quality sensitivity curves with accessible colors and markers."""
+    """Plot academic-quality sensitivity curves with accessible colors and markers."""
     if len(sensitivity_result_list) == 0:
         raise ValueError("sensitivity_result_list must not be empty.")
 
-    apply_thesis_plot_style()
+    apply_academic_plot_style()
 
     policy_names = list(sensitivity_result_list[0].policy_results.keys())
     x_values = np.asarray([point.parameter_value for point in sensitivity_result_list], dtype=float)
 
     path = _prepare_output_path(output_path)
-    fig, ax = plt.subplots(figsize=thesis_figure_size("full"))
+    fig, ax = plt.subplots(figsize=academic_figure_size("full"))
 
     for policy_index, policy_name in enumerate(policy_names):
         y_values = np.asarray(

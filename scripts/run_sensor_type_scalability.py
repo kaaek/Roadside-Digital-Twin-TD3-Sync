@@ -170,7 +170,6 @@ def build_expected_manifest(
         "evaluation_seed_start": int(args.evaluation_seed_start),
         "active_policy_set": ["Greedy", "Proximity Greedy", "TD3", "PPO"],
         "max_supported_sensor_types": len(constants.DEFAULT_SENSOR_DEFINITIONS),
-        "max_pair_count_for_action_space": int(simulation_config.system.max_pair_count_for_action_space),
     }
 
     if algorithm == "td3":

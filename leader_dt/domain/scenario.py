@@ -43,6 +43,9 @@ class Scenario:
     def sensing_delay_slots_array_by_sensor_type(self) -> np.ndarray:
         return np.array([sensor.sensing_delay_slots for sensor in self.sensor_types], dtype=np.float64)
 
+    def vehicle_index_array_by_pair(self) -> np.ndarray:
+        return np.array([int(pair.vehicle_id) for pair in self.sensor_pair_index.pairs], dtype=np.int64)
+
     def sensor_type_index_array_by_pair(self) -> np.ndarray:
         return np.array([int(pair.sensor_type_id) for pair in self.sensor_pair_index.pairs], dtype=np.int64)
 

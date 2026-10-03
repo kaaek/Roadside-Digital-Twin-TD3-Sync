@@ -233,13 +233,13 @@ Sensitivity outputs are usually saved under:
 
 ### 23. Change the sensor sample arrival rate
 
-The default rate is `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` in `leader_dt/constants.py` (`0.10`; `None` restores the legacy model where every pair has fresh data every slot). Override it for a single training run:
+The default rate is `DEFAULT_SAMPLE_ARRIVAL_RATE_PER_SLOT` in `leader_dt/constants.py` (`0.10`; `None` gives every pair fresh data every slot). Override it for a single training run:
 
 ```bash
 python scripts/train_td3_until_convergence.py --seed 1 --sample-arrival-rate 0.05 --output-dir results/td3_lambda005_seed1
 ```
 
-Sweep it with trained models (they must be trained with the arrival process enabled):
+Sweep it with trained models (a trained model can be evaluated at any rate):
 
 ```bash
 python scripts/run_sensitivity.py --parameter sample_arrival_rate --values 0.02,0.05,0.1,0.2,0.5,1.0 --trials 500 --seed-start 50000 --td3-model-path results/convergence_td3/models/best_td3.zip --ppo-model-path results/convergence_ppo/models/best_ppo.zip --output-dir results/sweeps/sensitivity_sample_arrival_rate
@@ -250,6 +250,14 @@ python scripts/run_sensitivity.py --parameter sample_arrival_rate --values 0.02,
 ```bash
 bash generate_final_results.sh   # prints the background job PID
 bash check_progress.sh           # follows logs/final_results.log
+```
+
+### 25. Diagnose how policies choose pairs
+
+Reports average weighted AoI, the share of failed uploads, the mean distance rank of the scheduled pair (0 = closest, 0.5 = random) and the share of picks whose link cannot meet the accuracy threshold, over held-out seeds:
+
+```bash
+python scripts/diagnose_policy.py --policies greedy,proximity,td3,ppo --td3-model-path results/convergence_td3/models/best_td3.zip --ppo-model-path results/convergence_ppo/models/best_ppo.zip --trials 30
 ```
 
 ## License
